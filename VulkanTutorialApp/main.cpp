@@ -1,36 +1,54 @@
-//#define GLFW_INCLUDE_VULKAN
-//this macro is defined in the glfw header to help include vulkan
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE //apply to vk, because vk scale depth from 0 to 1, whereas opengl use from -1 to 1
-#include <glm/glm.hpp>
-//#include <glm/mat4x4.hpp>
-
+#include <stdexcept>
+#include <vector>
 #include <iostream>
-using namespace std;
 
+#include "VulkanRenderer.h"
+
+GLFWwindow* window;
+VulkanRenderer vulkanRenderer;
+
+const std::vector<const char*> validationLayers = { "VK_LAYER_CHRONOS_validation" };
+
+#ifdef NDEBUG // use this marcro to check if is in debug mode
+const bool enableValidationLayers = false;
+#else
+const bool enableValidationLayers = true;
+#endif
+
+void initWindow(std::string wName = "Test Window", const int width = 800, const int height = 450) {
+
+	//init glfw
+	glfwInit();
+
+	//set glfw to not work with opengl
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+	window = glfwCreateWindow(width, height, wName.c_str(), nullptr, nullptr);
+}
 
 int main() {
-
-	glfwInit();
-									//not using opengl api, no ES (embedded system) api
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	GLFWwindow* window = glfwCreateWindow(800, 450, "display", nullptr, nullptr);
+	//create window
+	initWindow("Test WIndow", 800, 450);
 
 
-	uint32_t extensionCount = 0;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-	//cout << "extension count:" << extensionCount << endl;
+	//create vulkan renderer instance
+	if (vulkanRenderer.init(window) == EXIT_FAILURE)
+	{
+		return EXIT_FAILURE;
+	}
+
 
 	while (!glfwWindowShouldClose(window)) {
 
 		glfwPollEvents();
-
-
-
 	}
+	
+	//free memory
+	vulkanRenderer.cleanup();
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
