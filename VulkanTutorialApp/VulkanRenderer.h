@@ -31,6 +31,11 @@ private:
 	VkQueue graphicsQueue;
 
 
+	// - validation layers
+	// -- get Extension
+	ValidationLayers validationLayers;
+	std::vector<const char*> getRequiredExtensions();
+
 	// Vulkan Functions
 	// - Create Functions
 	void createInstance();
@@ -46,9 +51,6 @@ private:
 
 	// -- Get Family Queue indices
 	QueueFamilyIndices getQueueFamilies(VkPhysicalDevice device);
-
-	// - validation layers
-	ValidationLayers validationLayers;
 
 };
 

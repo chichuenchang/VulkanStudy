@@ -69,26 +69,24 @@ void VulkanRenderer::createInstance()
 	}
 
 	// Create list to hold instance extensions
-	std::vector<const char*> instanceExtensions = std::vector<const char*>();
+	std::vector<const char*> instanceExtensions = getRequiredExtensions();
 
-	// Set up extensions Instance will use
-	uint32_t glfwExtensionCount = 0;				// GLFW may require multiple extensions
-	const char** glfwExtensions;					// Extensions passed as array of cstrings, so need pointer (the array) to pointer (the cstring)
+	//// Set up extensions Instance will use
+	//uint32_t glfwExtensionCount = 0;				// GLFW may require multiple extensions
+	//const char** glfwExtensions;					// Extensions passed as array of cstrings, so need pointer (the array) to pointer (the cstring)
 
-	// Get GLFW extensions
-	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+	//// Get GLFW extensions
+	//glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-	// Add GLFW extensions to list of extensions
-	for (size_t i = 0; i < glfwExtensionCount; i++)
-	{
-		instanceExtensions.push_back(glfwExtensions[i]);
-	}
+	//// Add GLFW extensions to list of extensions
+	//for (size_t i = 0; i < glfwExtensionCount; i++){
+	//	instanceExtensions.push_back(glfwExtensions[i]);
+	//}
 
-	// Check Instance Extensions supported...
-	if (!checkInstanceExtensionSupport(&instanceExtensions))
-	{
-		throw std::runtime_error("VkInstance does not support required extensions!");
-	}
+	//// Check Instance Extensions supported...
+	//if (!checkInstanceExtensionSupport(&instanceExtensions)){
+	//	throw std::runtime_error("VkInstance does not support required extensions!");
+	//}
 
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
 	createInfo.ppEnabledExtensionNames = instanceExtensions.data();
@@ -100,8 +98,7 @@ void VulkanRenderer::createInstance()
 	// Create instance
 	VkResult result = vkCreateInstance(&createInfo, nullptr, &instance); //2nd argument is the customize allocator for memory management
 
-	if (result != VK_SUCCESS)
-	{
+	if (result != VK_SUCCESS){
 		throw std::runtime_error("Failed to create a Vulkan Instance!");
 	}
 }
@@ -256,4 +253,25 @@ QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice device)
 
 	
 	return indices;
+}
+
+std::vector<const char*> VulkanRenderer::getRequiredExtensions()
+{
+	uint32_t glfwExtensionCount = 0;
+	const char** glfwExtensions;
+	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount); // use glfw lib to get the list of extension and count number
+	
+	//copy all the data allocated at **glfwExtension to the vector
+	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+	
+	//push additional extension if validation layer enabled
+	if (validationLayers.enableValidationLayers) {
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+
+	if (!checkInstanceExtensionSupport(&extensions)) {
+		throw std::runtime_error("VkInstance does not support required extensions!");
+	}
+
+	return extensions;
 }
