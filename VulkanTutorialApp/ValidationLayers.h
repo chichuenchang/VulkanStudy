@@ -2,6 +2,7 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <cstring>
+#include <iostream>
 
 class ValidationLayers
 {
@@ -15,8 +16,14 @@ public:											  //not "VK_LAYER_CHRONOS_validation"
 
 	bool checkValidationLayerSupport();
 
-private:
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT messageType,
+		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+		void* pUserData);
 
+private:
+	
 
 
 };

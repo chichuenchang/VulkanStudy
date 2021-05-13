@@ -23,3 +23,18 @@ bool ValidationLayers::checkValidationLayerSupport()
 	}
 	return true;
 }
+
+VKAPI_ATTR VkBool32 VKAPI_CALL ValidationLayers::debugCallback(
+	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
+	VkDebugUtilsMessageTypeFlagsEXT messageType, 
+	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+{
+	std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+
+	if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+		//message is important enough to show
+	}
+
+	return VK_FALSE;
+}
+

@@ -12,6 +12,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 
 	try {
 		createInstance();
+		setupDebugMessenger();
 		getPhysicalDevice();
 		createLogicalDevice();
 	}
@@ -19,12 +20,14 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		printf("ERROR: %s\n", e.what());
 		return EXIT_FAILURE;
 	}
-
 	return 0;
 }
 
 void VulkanRenderer::cleanup()
 {
+	if (validationLayers.enableValidationLayers) {
+		DestoryDebugUtilsMessengerEXT(instance, debugMessenger, nullptr); //destroy messenger ext first, then instance
+	}
 	//whenever vkCreate#() is called, has to call vkDestroy#()
 	vkDestroyDevice(mainDevice.logicalDevice, nullptr);
 	vkDestroyInstance(instance, nullptr);
@@ -59,30 +62,31 @@ void VulkanRenderer::createInstance()
 	//createInfo.pNext: is used when create info with an extension 
 	//createInfo.flags: some flags to mark in vk
 
+	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
 	//if validationLayer is enabled
 	if (validationLayers.enableValidationLayers) {
 		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.validationLayers.size());
 		createInfo.ppEnabledLayerNames = validationLayers.validationLayers.data();
+		populateDebugMessengerCreateInfo(debugCreateInfo);
+		createInfo.pNext = static_cast<VkDebugUtilsMessengerCreateInfoEXT*>(&debugCreateInfo);
 	}
 	else {
 		createInfo.enabledLayerCount = 0;
+		createInfo.pNext = nullptr;
 	}
 
 	// Create list to hold instance extensions
-	std::vector<const char*> instanceExtensions = getRequiredExtensions();
-
-	//// Set up extensions Instance will use
+	std::vector<const char*> instanceExtensions = getRequiredExtensions();		//this extension list include all the glfw extension + validatation layer extension when 
+	
+																				//// Set up extensions Instance will use
 	//uint32_t glfwExtensionCount = 0;				// GLFW may require multiple extensions
 	//const char** glfwExtensions;					// Extensions passed as array of cstrings, so need pointer (the array) to pointer (the cstring)
-
 	//// Get GLFW extensions
 	//glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
 	//// Add GLFW extensions to list of extensions
 	//for (size_t i = 0; i < glfwExtensionCount; i++){
 	//	instanceExtensions.push_back(glfwExtensions[i]);
 	//}
-
 	//// Check Instance Extensions supported...
 	//if (!checkInstanceExtensionSupport(&instanceExtensions)){
 	//	throw std::runtime_error("VkInstance does not support required extensions!");
@@ -117,12 +121,12 @@ void VulkanRenderer::createLogicalDevice()
 	queueCreateInfo.pQueuePriorities = &priority;								// Vulkan needs to know how to handle multiple queues, so decide priority (1 = highest priority)
 
 	// Information to create logical device (sometimes called "device")
-	VkDeviceCreateInfo deviceCreateInfo = {};						//VkDeviceCreateInfo holds a VkDeviceQueueCreateInfo & a VkPhysicalDeviceFeatures
+	VkDeviceCreateInfo deviceCreateInfo = {};								//VkDeviceCreateInfo holds a VkDeviceQueueCreateInfo & a VkPhysicalDeviceFeatures
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	deviceCreateInfo.queueCreateInfoCount = 1;						// Number of Queue Create Infos
-	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;			// List of queue create infos so device can create required queues
-	deviceCreateInfo.enabledExtensionCount = 0;						// Number of enabled logical device extensions
-	deviceCreateInfo.ppEnabledExtensionNames = nullptr;				// List of enabled logical device extensions
+	deviceCreateInfo.queueCreateInfoCount = 1;								// Number of Queue Create Infos
+	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;					// List of queue create infos so device can create required queues
+	deviceCreateInfo.enabledExtensionCount = 0;								// Number of enabled logical device extensions
+	deviceCreateInfo.ppEnabledExtensionNames = nullptr;						// List of enabled logical device extensions
 
 	// Physical Device Features the Logical Device will be using
 	VkPhysicalDeviceFeatures deviceFeatures = {};
@@ -255,6 +259,58 @@ QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice device)
 	return indices;
 }
 
+void VulkanRenderer::setupDebugMessenger()
+{
+	if (!validationLayers.enableValidationLayers) return;
+
+	VkDebugUtilsMessengerCreateInfoEXT createInfo;
+	populateDebugMessengerCreateInfo(createInfo);
+
+	if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+		throw std::runtime_error("failed to setup debug messenger!");
+	}
+
+}
+
+void VulkanRenderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
+{
+	createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	createInfo.messageSeverity =
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	createInfo.messageType =
+		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	createInfo.pfnUserCallback = validationLayers.debugCallback;
+	createInfo.pUserData = nullptr; //optional
+}
+
+
+VkResult VulkanRenderer::CreateDebugUtilsMessengerEXT(VkInstance instance,// create messenger EXT requires a valid instance first
+	const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, VkAllocationCallbacks* pAllocator, 
+	VkDebugUtilsMessengerEXT* pDebugMessenger)
+{
+	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+	if (func != nullptr) {
+		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+	}
+	else {
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	}
+}
+
+void VulkanRenderer::DestoryDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, 
+	const VkAllocationCallbacks* pAllocator)
+{
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if (func != nullptr) {
+		func(instance, debugMessenger, pAllocator);
+	}
+}
+
 std::vector<const char*> VulkanRenderer::getRequiredExtensions()
 {
 	uint32_t glfwExtensionCount = 0;
@@ -275,3 +331,5 @@ std::vector<const char*> VulkanRenderer::getRequiredExtensions()
 
 	return extensions;
 }
+
+

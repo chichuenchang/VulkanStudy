@@ -30,10 +30,21 @@ private:
 	} mainDevice;
 	VkQueue graphicsQueue;
 
-
 	// - validation layers
-	// -- get Extension
 	ValidationLayers validationLayers;
+
+	// - setup debug messenger
+	// -- create debug messenger ext
+	// -- destroy debug messenger ext
+	VkDebugUtilsMessengerEXT debugMessenger;
+	void setupDebugMessenger();
+	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
+	VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, 
+		VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
+	void DestoryDebugUtilsMessengerEXT(VkInstance instantce, VkDebugUtilsMessengerEXT debugMessenger,
+		const VkAllocationCallbacks* pAllocator);
+
+	// -- get Extension
 	std::vector<const char*> getRequiredExtensions();
 
 	// Vulkan Functions
