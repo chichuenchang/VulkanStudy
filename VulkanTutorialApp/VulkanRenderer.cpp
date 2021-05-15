@@ -16,6 +16,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createSuface();				// create surface 
 		getPhysicalDevice();		
 		createLogicalDevice();		// this will call getQueueFamily(), need instantce, physical device, and surface before we can get & check support of queuefamily 
+		createSwapChain();
 	}
 	catch (const std::runtime_error& e) {
 		printf("ERROR: %s\n", e.what());
@@ -26,15 +27,17 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 
 void VulkanRenderer::cleanup()
 {	//whenever vkCreate#() is called, has to call vkDestroy#()
+	for (auto image : swapChainImages) {
+		vkDestroyImageView(mainDevice.logicalDevice, image.imageView, nullptr);
+	}
+	vkDestroySwapchainKHR(mainDevice.logicalDevice, swapchain, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
-
 	vkDestroyDevice(mainDevice.logicalDevice, nullptr);
 	if (validationLayers.enableValidationLayers) {
 		DestoryDebugUtilsMessengerEXT(instance, debugMessenger, nullptr); //destroy messenger ext first, then instance
 	}
 	vkDestroyInstance(instance, nullptr);
 }
-
 
 VulkanRenderer::~VulkanRenderer()
 {
@@ -67,8 +70,8 @@ void VulkanRenderer::createInstance()
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
 	//if validationLayer is enabled
 	if (validationLayers.enableValidationLayers) {
-		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.validationLayers.size());
-		createInfo.ppEnabledLayerNames = validationLayers.validationLayers.data();
+		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.validationLayersRequired.size());
+		createInfo.ppEnabledLayerNames = validationLayers.validationLayersRequired.data();
 		populateDebugMessengerCreateInfo(debugCreateInfo);
 		createInfo.pNext = static_cast<VkDebugUtilsMessengerCreateInfoEXT*>(&debugCreateInfo);
 	}
@@ -84,8 +87,8 @@ void VulkanRenderer::createInstance()
 	createInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
 	// TODO: Set up Validation Layers that Instance will use
-	createInfo.enabledLayerCount = 0;
-	createInfo.ppEnabledLayerNames = nullptr;
+	//createInfo.enabledLayerCount = 0;
+	//createInfo.ppEnabledLayerNames = nullptr;
 
 	// Create instance
 	VkResult result = vkCreateInstance(&createInfo, nullptr, &instance); //2nd argument is the customize allocator for memory management
@@ -95,14 +98,120 @@ void VulkanRenderer::createInstance()
 	}
 }
 
+void VulkanRenderer::createSuface()
+{
+	// Create Surface (creates a surface create info struct, runs the create surface function, returns result)
+	VkResult result = glfwCreateWindowSurface(instance, window, nullptr, &surface);
+	//VkWin32SurfaceCreateInfoKHR createInfo; // orinally this is the way to create surface, but glfw has built-in function helps to do the same thing
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create a surface!");
+	}
+
+}
+
+void VulkanRenderer::createSwapChain()
+{
+	// Get Swap Chain details so we can pick best settings
+	SwapChainInfo swapChainDetails = getSwapChainInfo(mainDevice.physicalDevice);
+
+	// Find optimal surface values for our swap chain
+	VkSurfaceFormatKHR surfaceFormat = chooseBestSurfaceFormat(swapChainDetails.formats);
+	VkPresentModeKHR presentMode = chooseBestPresentationMode(swapChainDetails.presentationModes);
+	VkExtent2D extent = chooseSwapChainExtent(swapChainDetails.surfaceCapabilities);
+
+	// How many images are in the swap chain? Get 1 more than the minimum to allow triple buffering
+	// image count in swap chain depends on the number provided by surface, so get the imageCount from surface settings, and then set it to swap chain
+	uint32_t imageCount = swapChainDetails.surfaceCapabilities.minImageCount + 1;
+
+	// If imageCount higher than max, then clamp down to max
+	// If maxImageCount = 0, then it's limitless
+	if (swapChainDetails.surfaceCapabilities.maxImageCount > 0
+		&& swapChainDetails.surfaceCapabilities.maxImageCount < imageCount)
+	{
+		imageCount = swapChainDetails.surfaceCapabilities.maxImageCount;
+	}
+
+	// Creation information for swap chain
+	VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
+	swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapChainCreateInfo.surface = surface;														// Swapchain surface
+	swapChainCreateInfo.imageFormat = surfaceFormat.format;										// Swapchain format
+	swapChainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;								// Swapchain colour space
+	swapChainCreateInfo.presentMode = presentMode;												// Swapchain presentation mode
+	swapChainCreateInfo.imageExtent = extent;													// Swapchain image extents
+	swapChainCreateInfo.minImageCount = imageCount;												// Minimum images in swapchain
+	swapChainCreateInfo.imageArrayLayers = 1;													// Number of layers for each image in chain
+	swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;						// What attachment images will be used as
+	swapChainCreateInfo.preTransform = swapChainDetails.surfaceCapabilities.currentTransform;	// Transform to perform on swap chain images
+	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;						// How to handle blending images with external graphics (e.g. other windows)
+	swapChainCreateInfo.clipped = VK_TRUE;														// Whether to clip parts of image not in view (e.g. behind another window, off screen, etc)
+
+	// [note]: graphics queue is used to render while presentation queue is used to submit imaged rendered to surface, setup swapchain to let it know which queue does it access
+	// Get Queue Family Indices
+
+	// If Graphics and Presentation families are different, then swapchain must let images be shared between families
+	if (this->queueFamilyIndices.graphicsFamily != this->queueFamilyIndices.presentationFamily)
+	{
+		// Queues to share between
+		uint32_t queueFamilyIndices[] = {
+			(uint32_t)this->queueFamilyIndices.graphicsFamily,
+			(uint32_t)this->queueFamilyIndices.presentationFamily
+		};
+
+		swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;		// Image share handling
+		swapChainCreateInfo.queueFamilyIndexCount = 2;							// Number of queues to share images between
+		swapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndices;			// Array of queues to share between
+	}
+	else
+	{
+		swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		swapChainCreateInfo.queueFamilyIndexCount = 0;
+		swapChainCreateInfo.pQueueFamilyIndices = nullptr;
+	}
+
+	// IF old swap chain been destroyed and this one replaces it, then link old one to quickly hand over responsibilities
+	swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE; //this is used when resizing window
+
+	// Create Swapchain
+	VkResult result = vkCreateSwapchainKHR(mainDevice.logicalDevice, &swapChainCreateInfo, nullptr, &swapchain);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create a Swapchain!");
+	}
+
+	//// Store for later reference
+	swapChainImageFormat = surfaceFormat.format;
+	swapChainExtent = extent;
+
+	// Get swap chain images (first count, then values)
+	uint32_t swapChainImageCount;
+	vkGetSwapchainImagesKHR(mainDevice.logicalDevice, swapchain, &swapChainImageCount, nullptr);
+	std::vector<VkImage> images(swapChainImageCount);
+	vkGetSwapchainImagesKHR(mainDevice.logicalDevice, swapchain, &swapChainImageCount, images.data());
+
+	for (VkImage image : images)
+	{
+		// Store image handle
+		SwapChainImage swapChainImage = {};
+		swapChainImage.image = image;
+		swapChainImage.imageView = createImageView(image, swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+
+		// Add to swapchain image list
+		swapChainImages.push_back(swapChainImage);
+	}
+
+
+}
+
 void VulkanRenderer::createLogicalDevice()
 {
-	//Get the queue family indices for the chosen Physical Device
-	QueueFamilyIndices indices = getQueueFamilies(mainDevice.physicalDevice);
+	// Get the queue family indices for the chosen Physical Device
 
 	// Vector for queue creation information, and set for family indices
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	std::set<int> queueFamilyIndices = { indices.graphicsFamily, indices.presentationFamily };
+	std::set<int> queueFamilyIndices = { this->queueFamilyIndices.graphicsFamily, this->queueFamilyIndices.presentationFamily };
 
 	// Queues the logical device needs to create and info to do so
 	for (int queueFamilyIndex : queueFamilyIndices)
@@ -116,21 +225,14 @@ void VulkanRenderer::createLogicalDevice()
 
 		queueCreateInfos.push_back(queueCreateInfo);
 	}
-	//// Queue the logical device needs to create and info to do so (Only 1 for now, will add more later!)
-	//VkDeviceQueueCreateInfo queueCreateInfo = {};								//logical device has to be create with queues
-	//queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	//queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;					// The index of the family to create a queue from
-	//queueCreateInfo.queueCount = 1;												// Number of queues to create
-	//float priority = 1.0f;
-	//queueCreateInfo.pQueuePriorities = &priority;								// Vulkan needs to know how to handle multiple queues, so decide priority (1 = highest priority)
 
 	// Information to create logical device (sometimes called "device")
 	VkDeviceCreateInfo deviceCreateInfo = {};								//VkDeviceCreateInfo holds a VkDeviceQueueCreateInfo & a VkPhysicalDeviceFeatures
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());		// Number of Queue Create Infos
-	deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();								// List of queue create infos so device can create required queues
-	deviceCreateInfo.enabledExtensionCount = 0;													// Number of enabled logical device extensions
-	deviceCreateInfo.ppEnabledExtensionNames = nullptr;											// List of enabled logical device extensions
+	deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());			// Number of Queue Create Infos
+	deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();									// List of queue create infos so device can create required queues, ckeck queue compatability by getQueueFamiliy() before assign here
+	deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensionsNeeded.size());	// Number of enabled logical device extensions, check compatability in getPhysicalDevice() before assign here
+	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensionsNeeded.data();						// List of enabled logical device extensions
 
 	// Physical Device Features the Logical Device will be using
 	VkPhysicalDeviceFeatures deviceFeatures = {};
@@ -147,21 +249,8 @@ void VulkanRenderer::createLogicalDevice()
 	// Queues are created at the same time as the device...
 	// So we want handle to queues
 	// From given logical device, of given Queue Family, of given Queue Index (0 since only one queue), place reference in given VkQueue
-	vkGetDeviceQueue(mainDevice.logicalDevice, indices.graphicsFamily, 0, &graphicsQueue);
-	vkGetDeviceQueue(mainDevice.logicalDevice, indices.presentationFamily, 0, &presentationQueue);
-}
-
-void VulkanRenderer::createSuface()
-{
-	// Create Surface (creates a surface create info struct, runs the create surface function, returns result)
-	VkResult result = glfwCreateWindowSurface(instance, window, nullptr, &surface);
-	//VkWin32SurfaceCreateInfoKHR createInfo; // orinally this is the way to create surface, but glfw has built-in function helps to do the same thing
-
-	if (result != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create a surface!");
-	}
-
+	vkGetDeviceQueue(mainDevice.logicalDevice, this->queueFamilyIndices.graphicsFamily, 0, &graphicsQueue);
+	vkGetDeviceQueue(mainDevice.logicalDevice, this->queueFamilyIndices.presentationFamily, 0, &presentationQueue);
 }
 
 void VulkanRenderer::getPhysicalDevice()
@@ -183,7 +272,7 @@ void VulkanRenderer::getPhysicalDevice()
 
 	for (const auto& device : deviceList)
 	{
-		if (checkDeviceSuitable(device))
+		if (checkPhysicalDeviceSuitable(device))
 		{
 			mainDevice.physicalDevice = device; 
 			break;
@@ -203,28 +292,29 @@ bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* che
 	//[note]: same funcion is called twice, first time to get the size, init an array with that size and populate the array by calling the same function second time
 
 	// Check if given extensions are in list of available extensions
-	for (const auto& checkExtension : *checkExtensionsNeeded)
+	int checkExtensionCount = 0;
+	for (const auto& checkExtensionNeeded : *checkExtensionsNeeded)
 	{
-		bool hasExtension = false;
+		//bool hasExtension = false;
 		for (const auto& extensionProvided : instanceExtensionsProvided)
 		{
-			if (strcmp(checkExtension, extensionProvided.extensionName) == 0) // should add == 0
+			if (strcmp(checkExtensionNeeded, extensionProvided.extensionName) == 0) // should add == 0
 			{
-				hasExtension = true;
-				break;
+				checkExtensionCount++;
+				continue;
 			}
 		}
+	}
 
-		if (!hasExtension)
-		{
-			return false;
-		}
+	if (checkExtensionCount < checkExtensionsNeeded->size()) {
+		return false;
 	}
 
 	return true;
 }
 
-bool VulkanRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
+bool VulkanRenderer::checkPhysicalDeviceExtensionSupport(VkPhysicalDevice device, 
+	const std::vector<const char*> &deviceExtensionsNeeded)
 {
 	// Get device extension count
 	uint32_t extensionCount = 0;
@@ -241,28 +331,26 @@ bool VulkanRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
 	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, extensionsProvided.data());
 
 	// Check for extension
+	int extensionFoundCount = 0;
 	for (const auto& deviceExtensionNeeded : deviceExtensionsNeeded)
 	{
-		bool hasExtension = false;
 		for (const auto& extensionProvided : extensionsProvided)
 		{
 			if (strcmp(deviceExtensionNeeded, extensionProvided.extensionName) == 0)
 			{
-				hasExtension = true;
-				break;
+				extensionFoundCount++;
+				continue;
 			}
 		}
-
-		if (!hasExtension)
-		{
-			return false;
-		}
 	}
-
+	if (extensionCount < deviceExtensionsNeeded.size())
+	{
+		return false;
+	}
 	return true;
 }
 
-bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice device)
+bool VulkanRenderer::checkPhysicalDeviceSuitable(VkPhysicalDevice device)
 {
 	/*
 	// Information about the device itself (ID, name, type, vendor, etc)
@@ -274,9 +362,15 @@ bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice device)
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 	*/
 
-	QueueFamilyIndices indices = getQueueFamilies(device);
+	queueFamilyIndices = getQueueFamilies(device);			// get queue family info from physical device and store
+	//QueueFamilyIndices indices = getQueueFamilies(device);
+	bool extensionsSupported = checkPhysicalDeviceExtensionSupport(device, deviceExtensionsNeeded);
 
-	return indices.isValid();
+	bool swapChainValid = false;
+	SwapChainInfo swapChainInfo = getSwapChainInfo(device);
+	swapChainValid = !swapChainInfo.presentationModes.empty() && !swapChainInfo.formats.empty();
+
+	return queueFamilyIndices.isValid() && extensionsSupported && swapChainValid;
 }
 
 QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice device)
@@ -287,12 +381,12 @@ QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice device)
 	uint32_t queueFamilyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
 
-	std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilyList.data());
+	std::vector<VkQueueFamilyProperties> queueFamilyListProvided(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilyListProvided.data());
 
 	// Go through each queue family and check if it has at least 1 of the required types of queue
 	int i = 0;
-	for (const VkQueueFamilyProperties& queueFamily : queueFamilyList)
+	for (const VkQueueFamilyProperties& queueFamily : queueFamilyListProvided)
 	{
 		// First check if queue family has at least 1 queue in that family (could have no queues)
 		// Queue can be multiple types defined through bitfield. Need to bitwise AND with VK_QUEUE_*_BIT to check if has required type
@@ -315,12 +409,142 @@ QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice device)
 		{
 			break;
 		}
-
 		i++;
 	}
-
-	
 	return indices;
+}
+
+SwapChainInfo VulkanRenderer::getSwapChainInfo(VkPhysicalDevice device)
+{
+	SwapChainInfo swapChainInfo;
+
+	// -- CAPABILITIES --
+	// Get the surface capabilities for the given surface on the given physical device
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &swapChainInfo.surfaceCapabilities);
+
+	// -- FORMATS --
+	uint32_t formatCount = 0;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+
+	// If formats returned, get list of formats
+	if (formatCount != 0)
+	{
+		swapChainInfo.formats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, swapChainInfo.formats.data());
+	}
+
+	// -- PRESENTATION MODES --
+	uint32_t presentationCount = 0;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentationCount, nullptr);
+
+	// If presentation modes returned, get list of presentation modes
+	if (presentationCount != 0)
+	{
+		swapChainInfo.presentationModes.resize(presentationCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentationCount, swapChainInfo.presentationModes.data());
+	}
+
+	return swapChainInfo;
+}
+
+// format		:	VK_FORMAT_R8G8B8A8_UNORM (VK_FORMAT_B8G8R8A8_UNORM as backup)
+// colorSpace	:	VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+VkSurfaceFormatKHR VulkanRenderer::chooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats)
+{
+	// If only 1 format available and is undefined, then this means ALL formats are available (no restrictions)
+	if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED)
+	{
+		return { VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+	}
+
+	// If restricted, search for optimal format
+	for (const auto& format : formats)
+	{
+		if ((format.format == VK_FORMAT_R8G8B8A8_UNORM || format.format == VK_FORMAT_B8G8R8A8_UNORM)
+			&& format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+		{
+			return format;
+		}
+	}
+
+	// If can't find optimal format, then just return first format
+	return formats[0];
+}
+
+VkPresentModeKHR VulkanRenderer::chooseBestPresentationMode(const std::vector<VkPresentModeKHR>& modes)
+{
+	// Look for Mailbox presentation mode
+	for (const auto& presentationMode : modes)
+	{
+		if (presentationMode == VK_PRESENT_MODE_MAILBOX_KHR)
+		{
+			return presentationMode;
+		}
+	}
+
+	// If can't find, use FIFO as Vulkan spec says it must be present
+	return VK_PRESENT_MODE_FIFO_KHR; //this is always available by default
+}
+
+VkExtent2D VulkanRenderer::chooseSwapChainExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities)
+{// VkExtent2D is part of VkSurfaceCapabilitiesKHR, this is what we want no the whole struct
+
+	// If current extent is at numeric limits, then extent can vary. Otherwise, it is the size of the window.
+	if (surfaceCapabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+	{
+		return surfaceCapabilities.currentExtent;
+	}
+	else
+	{
+		// If value can vary, need to set manually
+
+		// Get window size
+		int width, height;
+		glfwGetFramebufferSize(window, &width, &height);
+
+		// Create new extent using window size
+		VkExtent2D newExtent = {};
+		newExtent.width = static_cast<uint32_t>(width);
+		newExtent.height = static_cast<uint32_t>(height);
+
+		// Surface also defines max and min, so make sure within boundaries by clamping value
+		newExtent.width = std::max(surfaceCapabilities.minImageExtent.width, std::min(surfaceCapabilities.maxImageExtent.width, newExtent.width));
+		newExtent.height = std::max(surfaceCapabilities.minImageExtent.height, std::min(surfaceCapabilities.maxImageExtent.height, newExtent.height));
+
+		return newExtent;
+	}
+
+
+}
+
+VkImageView VulkanRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
+{
+	VkImageViewCreateInfo viewCreateInfo = {};
+	viewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewCreateInfo.image = image;											// Image to create view for
+	viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;						// Type of image (1D, 2D, 3D, Cube, etc)
+	viewCreateInfo.format = format;											// Format of image data
+	viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;			// Allows remapping of rgba components to other rgba values
+	viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+	// Subresources allow the view to view only a part of an image
+	viewCreateInfo.subresourceRange.aspectMask = aspectFlags;				// Which aspect of image to view (e.g. COLOR_BIT for viewing colour)
+	viewCreateInfo.subresourceRange.baseMipLevel = 0;						// Start mipmap level to view from
+	viewCreateInfo.subresourceRange.levelCount = 1;							// Number of mipmap levels to view
+	viewCreateInfo.subresourceRange.baseArrayLayer = 0;						// Start array level to view from
+	viewCreateInfo.subresourceRange.layerCount = 1;							// Number of array levels to view
+
+	// Create image view and return it
+	VkImageView imageView;
+	VkResult result = vkCreateImageView(mainDevice.logicalDevice, &viewCreateInfo, nullptr, &imageView);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create an Image View!");
+	}
+
+	return imageView;
 }
 
 void VulkanRenderer::setupDebugMessenger()

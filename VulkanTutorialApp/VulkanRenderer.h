@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <vector>
 #include <set>
+#include <algorithm>
 
 #include "Utility.h"
 #include "ValidationLayers.h"
@@ -30,10 +31,16 @@ private:
 		VkPhysicalDevice physicalDevice;
 		VkDevice logicalDevice;
 	} mainDevice;
+	QueueFamilyIndices queueFamilyIndices;
 	VkQueue graphicsQueue;
 	VkQueue presentationQueue;
-	VkSurfaceKHR surface; //A CHRONOS extension
+	VkSurfaceKHR surface;		//A CHRONOS extension
+	VkSwapchainKHR swapchain;
+	std::vector<SwapChainImage> swapChainImages;	//swap chain holds multiple images
 
+	// - utility
+	VkFormat swapChainImageFormat;
+	VkExtent2D swapChainExtent;
 
 	// - validation layers
 	ValidationLayers validationLayers;
@@ -57,18 +64,26 @@ private:
 	void createInstance();
 	void createLogicalDevice();
 	void createSuface();
-
+	void createSwapChain();
 	// - Get Functions
 	void getPhysicalDevice();
 
 	// - Support Functions
 	// -- Checker Functions
 	bool checkInstanceExtensionSupport(std::vector<const char*>* checkExtensions);		// to check if the extensions are supported by vk, this includes validation layer ext
-	bool checkDeviceSuitable(VkPhysicalDevice device);									// check if the available physical device is suitable
-	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+	bool checkPhysicalDeviceSuitable(VkPhysicalDevice device);									// check if the available physical device is suitable
+	bool checkPhysicalDeviceExtensionSupport(VkPhysicalDevice device, const std::vector<const char*>& deviceExtensionsNeeded);
 
 	// -- Get Family Queue indices
-	QueueFamilyIndices getQueueFamilies(VkPhysicalDevice device);
+	QueueFamilyIndices getQueueFamilies(VkPhysicalDevice device);	//queue families are obtained from physical device, and the assign to logical device
+	SwapChainInfo getSwapChainInfo(VkPhysicalDevice device);		//swap chain infos are obtained from physical device
 
+	// -- choose best setting for swapchain
+	VkSurfaceFormatKHR chooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+	VkPresentModeKHR chooseBestPresentationMode(const std::vector<VkPresentModeKHR>& modes);
+	VkExtent2D chooseSwapChainExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities);
+
+	// -- create 
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 };
 

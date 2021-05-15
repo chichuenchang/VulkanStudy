@@ -15,3 +15,14 @@ struct QueueFamilyIndices {
 		return graphicsFamily >= 0 && presentationFamily >= 0;
 	}
 };
+
+struct SwapChainInfo {									//[note]: Swapchain holds the info of surface because vk doesn't interact with surface, we access surface through swapchain, so swapchain contains info of surface
+	VkSurfaceCapabilitiesKHR surfaceCapabilities;		//surface property, (image size)
+	std::vector<VkSurfaceFormatKHR> formats;			// Surface image formats, e.g. RGBA and size of each colour
+	std::vector<VkPresentModeKHR> presentationModes;	// How images should be presented to screen
+};
+
+struct SwapChainImage {
+	VkImage image;				//very similar to physical device, get image from raw image data
+	VkImageView imageView;		//create imageview by setup interpretation of image
+};
