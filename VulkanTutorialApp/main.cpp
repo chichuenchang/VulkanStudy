@@ -10,7 +10,6 @@
 GLFWwindow* window;
 VulkanRenderer vulkanRenderer;
 
-
 void initWindow(std::string wName = "Test Window", const int width = 800, const int height = 450) {
 
 	//init glfw
@@ -27,13 +26,11 @@ int main() {
 	//create window
 	initWindow("Test WIndow", 800, 450);
 
-
 	//create vulkan renderer instance
 	if (vulkanRenderer.init(window) == EXIT_FAILURE)
 	{
 		return EXIT_FAILURE;
 	}
-
 
 	while (!glfwWindowShouldClose(window)) {
 

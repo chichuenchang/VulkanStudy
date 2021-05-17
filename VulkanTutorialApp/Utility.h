@@ -1,4 +1,5 @@
 #pragma once
+#include <fstream>
 
 const std::vector<const char*> deviceExtensionsNeeded = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME  //"VK_KHR_swapchain"
@@ -26,3 +27,31 @@ struct SwapChainImage {
 	VkImage image;				//very similar to physical device, get image from raw image data
 	VkImageView imageView;		//create imageview by setup interpretation of image
 };
+
+static std::vector<char> readFile(const std::string& filename) {
+	// open stream from given file
+	// std::ios::binary tells stream to read file as binary
+	// std::ios::ate tells stream to start reading from end of file
+	// spir-v is raw binary data and set the pointer to the end of file (to get the size)
+	std::ifstream file(filename, std::ios::binary | std::ios::ate);
+
+	//check successfully open
+	if (!file.is_open()) {
+		throw std::runtime_error("Faile to open file: " + filename);
+	}
+
+	// get current read position and resize file buffer
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> fileBuffer(fileSize);
+
+	// move read position to the start of file
+	file.seekg(0);
+
+	// read the file data into the buffer 
+	file.read(fileBuffer.data(), fileSize);
+
+	// close stream
+	file.close();
+
+	return fileBuffer;
+}

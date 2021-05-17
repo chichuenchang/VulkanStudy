@@ -5,23 +5,23 @@ bool ValidationLayers::checkValidationLayerSupport()
 	uint32_t layerCount; 
 	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
-	std::vector<VkLayerProperties> availableLayers(layerCount);
-	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+	std::vector<VkLayerProperties> layersAvailable(layerCount);
+	vkEnumerateInstanceLayerProperties(&layerCount, layersAvailable.data());
 	
-	for (const char* layerName : validationLayersRequired) {
-		bool layerFound = false;
+	int foundCount = 0;
+	for (const char* layerNameRequired : validationLayersRequired) {
 
-		for (const auto& availableLayer : availableLayers) {
-			if (strcmp(layerName, availableLayer.layerName) == 0) {
-				layerFound = true;
-				break;
+		for (const auto& layerAvailable : layersAvailable) {
+			if (strcmp(layerNameRequired, layerAvailable.layerName) == 0) {
+				
+				foundCount++;
+				if (foundCount == validationLayersRequired.size()) {
+					return true;
+				}
 			}
 		}
-		if (!layerFound) {
-			return false;
-		}
 	}
-	return true;
+	return false;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL ValidationLayers::debugCallback(
