@@ -8,6 +8,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <array>
 
 #include "Utility.h"
 #include "ValidationLayers.h"
@@ -38,6 +39,11 @@ private:
 	VkSwapchainKHR swapchain;
 	std::vector<SwapChainImage> swapChainImages;	//swap chain holds multiple images
 
+	// - Pipeline
+	VkPipeline graphicsPipeline;
+	VkPipelineLayout pipelineLayout;
+	VkRenderPass renderPass;
+
 	// - utility
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
@@ -65,6 +71,7 @@ private:
 	void createLogicalDevice();
 	void createSuface();
 	void createSwapChain();
+	void createRenderPass();
 	void createGraphicsPipeline();
 
 	// - Get Functions
