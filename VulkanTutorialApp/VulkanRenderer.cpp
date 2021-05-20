@@ -17,6 +17,10 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createSwapChain();
 		createRenderPass();
 		createGraphicsPipeline();
+		createFramebuffer();
+		createCommandPool();
+		allocateCommandBuffers();
+		recordCommands();
 	}
 	catch (const std::runtime_error& e) {
 		printf("ERROR: %s\n", e.what());
@@ -27,10 +31,14 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 
 void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vkDestroy#()
 {	
+	vkDestroyCommandPool(mainDevice.logicalDevice, graphicsCommandPool, nullptr);
+	for (const VkFramebuffer& framebuffer : swapChainFramebuffers) {
+		vkDestroyFramebuffer(mainDevice.logicalDevice, framebuffer, nullptr);
+	}
 	vkDestroyPipeline(mainDevice.logicalDevice, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(mainDevice.logicalDevice, pipelineLayout, nullptr);
 	vkDestroyRenderPass(mainDevice.logicalDevice, renderPass, nullptr);
-	for (auto image : swapChainImages) {
+	for (const SwapChainImage& image : swapChainImages) {
 		vkDestroyImageView(mainDevice.logicalDevice, image.imageView, nullptr);
 	}
 	vkDestroySwapchainKHR(mainDevice.logicalDevice, swapchain, nullptr);
@@ -193,7 +201,7 @@ void VulkanRenderer::createSwapChain()
 	std::vector<VkImage> images(swapChainImageCount);
 	vkGetSwapchainImagesKHR(mainDevice.logicalDevice, swapchain, &swapChainImageCount, images.data());
 
-	for (VkImage image : images)
+	for (const VkImage& image : images)
 	{
 		// Store image handle
 		SwapChainImage swapChainImage = {};
@@ -211,8 +219,8 @@ void VulkanRenderer::createRenderPass()
 	VkAttachmentDescription colourAttachment = {};
 	colourAttachment.format = swapChainImageFormat;						// Format to use for attachment
 	colourAttachment.samples = VK_SAMPLE_COUNT_1_BIT;					// Number of samples to write for multisampling
-	colourAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;				// Describes what to do with attachment before rendering
-	colourAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;			// Describes what to do with attachment after rendering
+	colourAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;				// Describes what to do with attachment before rendering (render pass begin)
+	colourAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;			// Describes what to do with attachment after rendering (render pass end)
 	colourAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	// Describes what to do with stencil before rendering
 	colourAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;	// Describes what to do with stencil after rendering
 	// Framebuffer data will be stored as an image, but images can be given different data layouts to give optimal use for certain operations
@@ -223,7 +231,7 @@ void VulkanRenderer::createRenderPass()
 	// Attachment reference uses an attachment index that refers to index in the attachment list passed to renderPassCreateInfo
 	VkAttachmentReference colourAttachmentReference = {};
 	colourAttachmentReference.attachment = 0;
-	colourAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colourAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // [conclusion]: the layout is changed from VK_IMAGE_LAYOUT_UNDEFINED (initial layout) => VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL (subpass layout)=> VK_IMAGE_LAYOUT_PRESENT_SRC_KHR (final layout)
 
 	// Information about a particular subpass the Render Pass is using
 	VkSubpassDescription subpass = {};
@@ -256,7 +264,6 @@ void VulkanRenderer::createRenderPass()
 	subpassDependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 	subpassDependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 	subpassDependencies[1].dependencyFlags = 0;
-	// [conclusion]: the layout is changed from VK_IMAGE_LAYOUT_UNDEFINED => VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL => VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 
 	// Create info for Render Pass
 	VkRenderPassCreateInfo renderPassCreateInfo = {};
@@ -448,6 +455,124 @@ void VulkanRenderer::createGraphicsPipeline()
 	vkDestroyShaderModule(mainDevice.logicalDevice, vertexShaderModule, nullptr);
 }
 
+void VulkanRenderer::createFramebuffer() //for each swapchain image, create 1 corresponding framebuffer, and store them in a vector
+{
+	// Resize framebuffer count to equal swap chain image count
+	swapChainFramebuffers.resize(swapChainImages.size());
+
+	// Create a framebuffer for each swap chain image
+	for (size_t i = 0; i < swapChainFramebuffers.size(); i++)
+	{
+		std::array<VkImageView, 1> attachments = {
+			swapChainImages[i].imageView
+		};
+
+		VkFramebufferCreateInfo framebufferCreateInfo = {};
+		framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferCreateInfo.renderPass = renderPass;										// Render Pass layout the Framebuffer will be used with
+		framebufferCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		framebufferCreateInfo.pAttachments = attachments.data();							// List of attachments (1 to 1 with Render Pass)
+		framebufferCreateInfo.width = swapChainExtent.width;								// Framebuffer width
+		framebufferCreateInfo.height = swapChainExtent.height;								// Framebuffer height
+		framebufferCreateInfo.layers = 1;													// Framebuffer layers
+
+		VkResult result = vkCreateFramebuffer(mainDevice.logicalDevice, &framebufferCreateInfo, nullptr, &swapChainFramebuffers[i]);
+		if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create a Framebuffer!");
+		}
+	}
+}
+
+void VulkanRenderer::createCommandPool()
+{
+	// Get indices of queue families from device
+	//QueueFamilyIndices queueFamilyIndices = getQueueFamilies(mainDevice.physicalDevice);
+	VkCommandPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = this->queueFamilyIndices.graphicsFamily;	// Queue Family type that buffers from this command pool will use
+
+	// Create a Graphics Queue Family Command Pool
+	VkResult result = vkCreateCommandPool(mainDevice.logicalDevice, &poolInfo, nullptr, &graphicsCommandPool);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create a Command Pool!");
+	}
+}
+
+void VulkanRenderer::allocateCommandBuffers() 
+{
+	// Resize command buffer count to have one for each framebuffer
+	commandBuffers.resize(swapChainFramebuffers.size());
+
+	VkCommandBufferAllocateInfo cbAllocInfo = {};
+	cbAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cbAllocInfo.commandPool = graphicsCommandPool;
+	cbAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// VK_COMMAND_BUFFER_LEVEL_PRIMARY	: Buffer you submit directly to queue. Cant be called by other buffers.
+															// VK_COMMAND_BUFFER_LEVEL_SECONARY	: Buffer can't be called directly. Can be called from other buffers via "vkCmdExecuteCommands" when recording commands in primary buffer
+	cbAllocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+
+	// Allocate command buffers and place handles in array of buffers
+	VkResult result = vkAllocateCommandBuffers(mainDevice.logicalDevice, &cbAllocInfo, commandBuffers.data());
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to allocate Command Buffers!");
+	}
+	// [note]: no need to destroy CommandBuffers since cmdBuffs are held by cmdPool, and when cmdPool is destroyed, so are cmdBuffs
+}
+
+void VulkanRenderer::recordCommands()
+{
+	// Information about how to begin each command buffer
+	VkCommandBufferBeginInfo bufferBeginInfo = {};
+	bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	bufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;	// Buffer can be resubmitted when it has already been submitted and is awaiting execution
+
+	// Information about how to begin a render pass (only needed for graphical applications)
+	VkRenderPassBeginInfo renderPassBeginInfo = {};
+	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassBeginInfo.renderPass = renderPass;							// Render Pass to begin
+	renderPassBeginInfo.renderArea.offset = { 0, 0 };						// Start point of render pass in pixels
+	renderPassBeginInfo.renderArea.extent = swapChainExtent;				// Size of region to run render pass on (starting at offset)
+	VkClearValue clearValues[] = {
+		{0.6f, 0.65f, 0.4, 1.0f}
+	};
+	renderPassBeginInfo.pClearValues = clearValues;							// List of clear values (TODO: Depth Attachment Clear Value)
+	renderPassBeginInfo.clearValueCount = 1;
+
+	for (size_t i = 0; i < commandBuffers.size(); i++)
+	{
+		renderPassBeginInfo.framebuffer = swapChainFramebuffers[i];
+
+		// Start recording commands to command buffer!
+		VkResult result = vkBeginCommandBuffer(commandBuffers[i], &bufferBeginInfo);
+		if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to start recording a Command Buffer!");
+		}
+
+			// Begin Render Pass, this will call the colourAttachment.loadOp in createRenderPass()
+			vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+				// Bind Pipeline to be used in render pass
+				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+				// Execute pipeline
+				vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+
+			// End Render Pass
+			vkCmdEndRenderPass(commandBuffers[i]);
+
+		// Stop recording to command buffer
+		result = vkEndCommandBuffer(commandBuffers[i]);
+		if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to stop recording a Command Buffer!");
+		}
+	}
+
+}
+
 void VulkanRenderer::createLogicalDevice()
 {
 	// Get the queue family indices for the chosen Physical Device
@@ -461,7 +586,7 @@ void VulkanRenderer::createLogicalDevice()
 	{
 		VkDeviceQueueCreateInfo queueCreateInfo = {};
 		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queueCreateInfo.queueFamilyIndex = queueFamilyIndex;						// The index of the family to create a queue from
+		queueCreateInfo.queueFamilyIndex = static_cast<uint32_t>(queueFamilyIndex);						// The index of the family to create a queue from
 		queueCreateInfo.queueCount = 1;												// Number of queues to create
 		float priority = 1.0f;
 		queueCreateInfo.pQueuePriorities = &priority;								// Vulkan needs to know how to handle multiple queues, so decide priority (1 = highest priority)
@@ -514,7 +639,7 @@ void VulkanRenderer::getPhysicalDevice()
 	std::vector<VkPhysicalDevice> deviceList(deviceCount);
 	vkEnumeratePhysicalDevices(instance, &deviceCount, deviceList.data());
 
-	for (const auto& device : deviceList)
+	for (const VkPhysicalDevice& device : deviceList)
 	{
 		if (checkPhysicalDeviceSuitable(device))
 		{
@@ -537,10 +662,10 @@ bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* che
 
 	// Check if given extensions are in list of available extensions
 	int checkExtensionCount = 0;
-	for (const auto& checkExtensionNeeded : *checkExtensionsNeeded)
+	for (const char* &checkExtensionNeeded : *checkExtensionsNeeded)
 	{
 		//bool hasExtension = false;
-		for (const auto& extensionProvided : instanceExtensionsProvided)
+		for (const VkExtensionProperties& extensionProvided : instanceExtensionsProvided)
 		{
 			if (strcmp(checkExtensionNeeded, extensionProvided.extensionName) == 0) // should add == 0
 			{
@@ -576,9 +701,9 @@ bool VulkanRenderer::checkPhysicalDeviceExtensionSupport(VkPhysicalDevice device
 
 	// Check for extension
 	int extensionFoundCount = 0;
-	for (const auto& deviceExtensionNeeded : deviceExtensionsNeeded)
+	for (const char* deviceExtensionNeeded : deviceExtensionsNeeded)
 	{
-		for (const auto& extensionProvided : extensionsProvided)
+		for (const VkExtensionProperties& extensionProvided : extensionsProvided)
 		{
 			if (strcmp(deviceExtensionNeeded, extensionProvided.extensionName) == 0)
 			{
@@ -702,7 +827,7 @@ VkSurfaceFormatKHR VulkanRenderer::chooseBestSurfaceFormat(const std::vector<VkS
 	}
 
 	// If restricted, search for optimal format
-	for (const auto& format : formats)
+	for (const VkSurfaceFormatKHR& format : formats)
 	{
 		if ((format.format == VK_FORMAT_R8G8B8A8_UNORM || format.format == VK_FORMAT_B8G8R8A8_UNORM)
 			&& format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)

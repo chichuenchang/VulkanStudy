@@ -37,12 +37,19 @@ private:
 	VkQueue presentationQueue;
 	VkSurfaceKHR surface;		//A CHRONOS extension
 	VkSwapchainKHR swapchain;
-	std::vector<SwapChainImage> swapChainImages;	//swap chain holds multiple images
 
+	// [important]: commandBuffers[0] must correspond to swapChainFramebuffers[0], and then swapChainImages[0], index must be the same
+	std::vector<SwapChainImage> swapChainImages;	//swap chain holds multiple images
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+	std::vector<VkCommandBuffer> commandBuffers;
+	
 	// - Pipeline
 	VkPipeline graphicsPipeline;
 	VkPipelineLayout pipelineLayout;
 	VkRenderPass renderPass;
+
+	// - Pools
+	VkCommandPool graphicsCommandPool; //this pool is only used for graphics queue
 
 	// - utility
 	VkFormat swapChainImageFormat;
@@ -73,6 +80,12 @@ private:
 	void createSwapChain();
 	void createRenderPass();
 	void createGraphicsPipeline();
+	void createFramebuffer();
+	void createCommandPool();
+	void createCommandBuffers();
+
+	// - Record commandBuffer
+	void recordCommands();
 
 	// - Get Functions
 	void getPhysicalDevice();
