@@ -19,12 +19,15 @@ public:
 	VulkanRenderer();
 
 	int init(GLFWwindow* newWindow);
+	void draw();	//draw call
 	void cleanup();
 
 	~VulkanRenderer();
 
 private:
 	GLFWwindow* window;
+
+	int currentFrame = 0; // keep track of the loop of frame, increment with each frame drawn, when it reaches 2, start from 0 again
 
 	//// Vulkan Components
 	VkInstance instance;
@@ -55,6 +58,11 @@ private:
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 
+	// - synchronization
+	std::vector<VkSemaphore> semaphoreImageAvailable;		//signal for image available
+	std::vector<VkSemaphore> semaphoreFinishRender;			//signal for image done drawing
+	std::vector<VkFence> drawFences;
+
 	// - validation layers
 	ValidationLayers validationLayers;
 
@@ -62,6 +70,8 @@ private:
 	// -- create debug messenger ext
 	// -- destroy debug messenger ext
 	VkDebugUtilsMessengerEXT debugMessenger;
+
+	// - Functions
 	void setupDebugMessenger();
 	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 	VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, 
@@ -82,7 +92,8 @@ private:
 	void createGraphicsPipeline();
 	void createFramebuffer();
 	void createCommandPool();
-	void createCommandBuffers();
+	void allocateCommandBuffers();
+	void createSynchronization();
 
 	// - Record commandBuffer
 	void recordCommands();
@@ -108,5 +119,6 @@ private:
 	// -- create 
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	VkShaderModule createShaderModule(const std::vector<char>& code);
+
 };
 

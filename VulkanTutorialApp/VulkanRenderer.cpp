@@ -21,6 +21,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createCommandPool();
 		allocateCommandBuffers();
 		recordCommands();
+		createSynchronization();
 	}
 	catch (const std::runtime_error& e) {
 		printf("ERROR: %s\n", e.what());
@@ -29,8 +30,17 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 	return 0;
 }
 
+
 void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vkDestroy#()
 {	
+	// Wait until all commands are executed and nothing is pending in the queue
+	vkDeviceWaitIdle(mainDevice.logicalDevice); //or to use vkQueueWaitIdle();
+
+	for (size_t i = 0; i < MAX_FRAME_DRAWS; i++) {
+		vkDestroySemaphore(mainDevice.logicalDevice, semaphoreFinishRender[i], nullptr);
+		vkDestroySemaphore(mainDevice.logicalDevice, semaphoreImageAvailable[i], nullptr);
+		vkDestroyFence(mainDevice.logicalDevice, drawFences[i], nullptr);
+	}
 	vkDestroyCommandPool(mainDevice.logicalDevice, graphicsCommandPool, nullptr);
 	for (const VkFramebuffer& framebuffer : swapChainFramebuffers) {
 		vkDestroyFramebuffer(mainDevice.logicalDevice, framebuffer, nullptr);
@@ -53,6 +63,68 @@ void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vk
 VulkanRenderer::~VulkanRenderer()
 {
 }
+
+void VulkanRenderer::draw()
+{
+	// 3 stages
+	// 1. Get the next available image and draw to it, then set the signal when finish drawing (semaphore)
+	// 2. Submit command buffer to queue for excecution, make sure command wait for the image to be signalled as available before drawing, and signals when finish drawing
+	// 3. Present image to surface when signalled finish drawing
+
+	// -- GET NEXT IMAGE --
+	// program stop and wait, until drawFences[currentFrame] is signalled, ( wait for given fence to signal (open) from last draw before continuing
+	// drawFences[currentFrame] will be signalled by vkQueueSubmit()
+	vkWaitForFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
+	// Manually reset/close fences
+	vkResetFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame]);
+
+	// Get index of next image to be drawn to, and signal semaphore when ready to be drawn to
+	uint32_t imageIndex;										//never timeout
+	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), semaphoreImageAvailable[currentFrame], VK_NULL_HANDLE, &imageIndex); //this extension call finds which one is the next image, and pass the index of that image in the swapchain
+
+	// -- SUBMIT COMMAND BUFFER TO RENDER --
+	// Queue submission information
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.waitSemaphoreCount = 1;										// Number of semaphores to wait on
+	submitInfo.pWaitSemaphores = &semaphoreImageAvailable[currentFrame];	// List of semaphores to wait on
+	VkPipelineStageFlags waitStages[] = {
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+	};
+	submitInfo.pWaitDstStageMask = waitStages;								// Stages to check semaphores at
+	submitInfo.commandBufferCount = 1;										// Number of command buffers to submit
+	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];				// Command buffer to submit, the index here is the same index get from vkAcquireNextImageKHR()
+	submitInfo.signalSemaphoreCount = 1;									// Number of semaphores to signal
+	submitInfo.pSignalSemaphores = &semaphoreFinishRender[currentFrame];	// Semaphores to signal when command buffer finishes
+
+	// Submit command buffer to queue
+	VkResult result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, drawFences[currentFrame]);	// when finish drawing, signal the fence
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to submit Command Buffer to Queue!");
+	}
+
+	// -- PRESENT RENDERED IMAGE TO SCREEN --
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;										// Number of semaphores to wait on
+	presentInfo.pWaitSemaphores = &semaphoreFinishRender[currentFrame];		// Semaphores to wait on
+	presentInfo.swapchainCount = 1;											// Number of swapchains to present to
+	presentInfo.pSwapchains = &swapchain;									// Swapchains to present images to
+	presentInfo.pImageIndices = &imageIndex;								// Index of images in swapchains to present
+
+	// Present image
+	result = vkQueuePresentKHR(presentationQueue, &presentInfo);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to present Image!");
+	}
+
+	// Get next frame (use % MAX_FRAME_DRAWS to keep value below MAX_FRAME_DRAWS)
+	currentFrame = (currentFrame + 1) % MAX_FRAME_DRAWS;
+
+}
+
 
 void VulkanRenderer::createInstance()
 {
@@ -230,8 +302,8 @@ void VulkanRenderer::createRenderPass()
 
 	// Attachment reference uses an attachment index that refers to index in the attachment list passed to renderPassCreateInfo
 	VkAttachmentReference colourAttachmentReference = {};
-	colourAttachmentReference.attachment = 0;
-	colourAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // [conclusion]: the layout is changed from VK_IMAGE_LAYOUT_UNDEFINED (initial layout) => VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL (subpass layout)=> VK_IMAGE_LAYOUT_PRESENT_SRC_KHR (final layout)
+	colourAttachmentReference.attachment = 0;										// this 0 is index
+	colourAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;	// [conclusion]: the layout is changed from VK_IMAGE_LAYOUT_UNDEFINED (initial layout) => VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL (subpass layout)=> VK_IMAGE_LAYOUT_PRESENT_SRC_KHR (final layout)
 
 	// Information about a particular subpass the Render Pass is using
 	VkSubpassDescription subpass = {};
@@ -280,7 +352,6 @@ void VulkanRenderer::createRenderPass()
 	{
 		throw std::runtime_error("Failed to create a Render Pass!");
 	}
-
 }
 
 void VulkanRenderer::createGraphicsPipeline()
@@ -521,12 +592,37 @@ void VulkanRenderer::allocateCommandBuffers()
 	// [note]: no need to destroy CommandBuffers since cmdBuffs are held by cmdPool, and when cmdPool is destroyed, so are cmdBuffs
 }
 
+void VulkanRenderer::createSynchronization()
+{
+	// The reason resize semaphore size is we want decouple frame with image, the max number of images in the queue should be MAX_FRAME_DRAWS
+	semaphoreImageAvailable.resize(MAX_FRAME_DRAWS);
+	semaphoreFinishRender.resize(MAX_FRAME_DRAWS);
+	drawFences.resize(MAX_FRAME_DRAWS);
+
+	// Semaphore creation information
+	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	// Fence creation information
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;			// let the fence be signalled/ open when start off created
+
+	for (size_t i = 0; i < MAX_FRAME_DRAWS; i++){
+		if (vkCreateSemaphore(mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &semaphoreImageAvailable[i]) != VK_SUCCESS ||
+			vkCreateSemaphore(mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &semaphoreFinishRender[i]) != VK_SUCCESS ||
+			vkCreateFence(mainDevice.logicalDevice, &fenceCreateInfo, nullptr, &drawFences[i]) != VK_SUCCESS){
+			throw std::runtime_error("Failed to create a Semaphore and/or Fence!");
+		}
+	}
+}
+
 void VulkanRenderer::recordCommands()
 {
 	// Information about how to begin each command buffer
 	VkCommandBufferBeginInfo bufferBeginInfo = {};
 	bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	bufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;	// Buffer can be resubmitted when it has already been submitted and is awaiting execution
+	//bufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;	// Buffer can be resubmitted when it has already been submitted and is awaiting execution
 
 	// Information about how to begin a render pass (only needed for graphical applications)
 	VkRenderPassBeginInfo renderPassBeginInfo = {};
@@ -535,7 +631,7 @@ void VulkanRenderer::recordCommands()
 	renderPassBeginInfo.renderArea.offset = { 0, 0 };						// Start point of render pass in pixels
 	renderPassBeginInfo.renderArea.extent = swapChainExtent;				// Size of region to run render pass on (starting at offset)
 	VkClearValue clearValues[] = {
-		{0.6f, 0.65f, 0.4, 1.0f}
+		{0.1f, 0.25f, 0.2, 1.0f}
 	};
 	renderPassBeginInfo.pClearValues = clearValues;							// List of clear values (TODO: Depth Attachment Clear Value)
 	renderPassBeginInfo.clearValueCount = 1;
@@ -544,7 +640,7 @@ void VulkanRenderer::recordCommands()
 	{
 		renderPassBeginInfo.framebuffer = swapChainFramebuffers[i];
 
-		// Start recording commands to command buffer!
+		// Start recording commands to command buffer
 		VkResult result = vkBeginCommandBuffer(commandBuffers[i], &bufferBeginInfo);
 		if (result != VK_SUCCESS)
 		{

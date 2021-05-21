@@ -1,6 +1,8 @@
 #pragma once
 #include <fstream>
 
+const int MAX_FRAME_DRAWS = 2; // this number should be less than or equal to the number of swapchain images
+
 const std::vector<const char*> deviceExtensionsNeeded = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME  //"VK_KHR_swapchain"
 };
