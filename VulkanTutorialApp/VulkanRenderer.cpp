@@ -4,6 +4,10 @@ VulkanRenderer::VulkanRenderer()
 {
 }
 
+VulkanRenderer::~VulkanRenderer()
+{
+}
+
 int VulkanRenderer::init(GLFWwindow* newWindow)
 {
 	window = newWindow;
@@ -14,6 +18,9 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createSuface();				// create surface 
 		getPhysicalDevice();		
 		createLogicalDevice();		// this will call getQueueFamily(), need instantce, physical device, and surface before we can get & check support of queuefamily 
+		
+		createTestMesh();
+		
 		createSwapChain();
 		createRenderPass();
 		createGraphicsPipeline();
@@ -30,12 +37,12 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 	return 0;
 }
 
-
 void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vkDestroy#()
 {	
 	// Wait until all commands are executed and nothing is pending in the queue
 	vkDeviceWaitIdle(mainDevice.logicalDevice); //or to use vkQueueWaitIdle();
 
+	mesh.destroyVertexBuffer();
 	for (size_t i = 0; i < MAX_FRAME_DRAWS; i++) {
 		vkDestroySemaphore(mainDevice.logicalDevice, semaphoreFinishRender[i], nullptr);
 		vkDestroySemaphore(mainDevice.logicalDevice, semaphoreImageAvailable[i], nullptr);
@@ -60,10 +67,6 @@ void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vk
 	vkDestroyInstance(instance, nullptr);
 }
 
-VulkanRenderer::~VulkanRenderer()
-{
-}
-
 void VulkanRenderer::draw()
 {
 	// 3 stages
@@ -78,7 +81,7 @@ void VulkanRenderer::draw()
 	// Manually reset/close fences
 	vkResetFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame]);
 
-	// Get index of next image to be drawn to, and signal semaphore when ready to be drawn to
+	// Get index of next image to be drawn to, and then signal semaphore when ready to be drawn to
 	uint32_t imageIndex;										//never timeout
 	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), semaphoreImageAvailable[currentFrame], VK_NULL_HANDLE, &imageIndex); //this extension call finds which one is the next image, and pass the index of that image in the swapchain
 
@@ -96,7 +99,6 @@ void VulkanRenderer::draw()
 	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];				// Command buffer to submit, the index here is the same index get from vkAcquireNextImageKHR()
 	submitInfo.signalSemaphoreCount = 1;									// Number of semaphores to signal
 	submitInfo.pSignalSemaphores = &semaphoreFinishRender[currentFrame];	// Semaphores to signal when command buffer finishes
-
 	// Submit command buffer to queue
 	VkResult result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, drawFences[currentFrame]);	// when finish drawing, signal the fence
 	if (result != VK_SUCCESS)
@@ -122,9 +124,7 @@ void VulkanRenderer::draw()
 
 	// Get next frame (use % MAX_FRAME_DRAWS to keep value below MAX_FRAME_DRAWS)
 	currentFrame = (currentFrame + 1) % MAX_FRAME_DRAWS;
-
 }
-
 
 void VulkanRenderer::createInstance()
 {
@@ -383,16 +383,34 @@ void VulkanRenderer::createGraphicsPipeline()
 	// Graphics Pipeline creation info requires array of shader stage creates
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages= { vertexShaderCreateInfo, fragmentShaderCreateInfo };
 
-	//VkGraphicsPipelineCreateInfo graphicsPipeline;
-	// CREATE PIPELINE
+	// -- CREATE PIPELINE --
 
-	// -- VERTEX INPUT (TODO: Put in vertex descriptions when resources created) --
+	// How the data for a single vertex (including info such as position, colour, texture coords, normals, etc) is as a whole
+	VkVertexInputBindingDescription bindingDescription = {};
+	bindingDescription.binding = 0;									// Can bind multiple streams of data, this defines which one
+	bindingDescription.stride = sizeof(Vertex);						// Size of a single vertex object
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;		// VK_VERTEX_INPUT_RATE_VERTEX		: finish one instance and then the next // VK_VERTEX_INPUT_RATE_INSTANCE	: start from 1st vert of all instances, 2nd vert of all instances, 3rd vert of all instances, 4th verts
+
+	// How the data for an attribute is defined within a vertex
+	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
+	// Position Attribute
+	attributeDescriptions[0].binding = 0;							// Which binding the data is at (should be same as above)
+	attributeDescriptions[0].location = 0;							// Location in shader where data will be read from ***(should match the location in vertex shader)
+	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;	// Format the data will take (also helps define size of data)  *** must match the vec3 that defined in the shader
+	attributeDescriptions[0].offset = offsetof(Vertex, pos);		// Where this attribute is defined in the data for a single vertex
+	// Colour Attribute
+	attributeDescriptions[1].binding = 0;
+	attributeDescriptions[1].location = 1;
+	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[1].offset = offsetof(Vertex, col);
+
+	// -- VERTEX INPUT -- set up the vertex input
 	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
 	vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
-	vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;			// List of Vertex Binding Descriptions (data spacing/stride information)
-	vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;		// List of Vertex Attribute Descriptions (data format and where to bind to/from)
+	vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+	vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDescription;											// List of Vertex Binding Descriptions (data spacing/stride information)
+	vertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputCreateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();								// List of Vertex Attribute Descriptions (data format and where to bind to/from)
 
 	// -- INPUT ASSEMBLY --
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
@@ -647,14 +665,19 @@ void VulkanRenderer::recordCommands()
 			throw std::runtime_error("Failed to start recording a Command Buffer!");
 		}
 
-			// Begin Render Pass, this will call the colourAttachment.loadOp in createRenderPass()
+			// Begin Render Pass, this will apply the colourAttachment.loadOp in createRenderPass()
 			vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 				// Bind Pipeline to be used in render pass
 				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
+				// Get the buffer to be bound in the pipeline
+				VkBuffer vertexBuffers[] = { mesh.getVertexBuffer() };						// buffers to bind
+				VkDeviceSize offsets[] = { 0 };												// Offsets into buffers being bound
+				vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);	// cmd to bind vertex buffer before drawing
+
 				// Execute pipeline
-				vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+				vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(mesh.getVertexCount()), 1, 0, 0);
 
 			// End Render Pass
 			vkCmdEndRenderPass(commandBuffers[i]);
@@ -978,8 +1001,6 @@ VkExtent2D VulkanRenderer::chooseSwapChainExtent(const VkSurfaceCapabilitiesKHR&
 
 		return newExtent;
 	}
-
-
 }
 
 VkImageView VulkanRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
@@ -1030,6 +1051,13 @@ VkShaderModule VulkanRenderer::createShaderModule(const std::vector<char>& code)
 	return shaderModule;
 }
 
+void VulkanRenderer::createTestMesh()
+{
+	// Create Mesh
+	std::vector<Vertex> v = mesh.testMeshData();
+	mesh = Mesh(mainDevice.physicalDevice, mainDevice.logicalDevice, &v);
+}
+
 void VulkanRenderer::setupDebugMessenger()
 {
 	if (!validationLayers.enableValidationLayers) return;
@@ -1044,7 +1072,6 @@ void VulkanRenderer::setupDebugMessenger()
 	else if(result != VK_SUCCESS) {
 		throw std::runtime_error("failed to setup debug messenger!");
 	}
-
 }
 
 void VulkanRenderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)

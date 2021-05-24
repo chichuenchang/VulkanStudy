@@ -1,7 +1,7 @@
 #pragma once
 
 //#define VK_USE_PLATFORM_WIN32_KHR //def this to create surface for win32 system
-#define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_VULKAN // Tell GLFW to help include vulkan
 #include <GLFW/glfw3.h>
 
 #include <stdexcept>
@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 
+#include "Mesh.h"
 #include "Utility.h"
 #include "ValidationLayers.h"
 
@@ -17,17 +18,20 @@ class VulkanRenderer
 {
 public:
 	VulkanRenderer();
+	~VulkanRenderer();
 
 	int init(GLFWwindow* newWindow);
-	void draw();	//draw call
 	void cleanup();
+	void draw();	//draw call
 
-	~VulkanRenderer();
 
 private:
 	GLFWwindow* window;
 
 	int currentFrame = 0; // keep track of the loop of frame, increment with each frame drawn, when it reaches 2, start from 0 again
+
+	// Scene Objects
+	Mesh mesh;
 
 	//// Vulkan Components
 	VkInstance instance;
@@ -119,6 +123,7 @@ private:
 	// -- create 
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	VkShaderModule createShaderModule(const std::vector<char>& code);
+	void createTestMesh();
 
 };
 
