@@ -18,14 +18,12 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createSuface();				// create surface 
 		getPhysicalDevice();		
 		createLogicalDevice();		// this will call getQueueFamily(), need instantce, physical device, and surface before we can get & check support of queuefamily 
-		
-		createTestMesh();
-		
 		createSwapChain();
 		createRenderPass();
 		createGraphicsPipeline();
 		createFramebuffer();
 		createCommandPool();
+			createTestMesh();
 		allocateCommandBuffers();
 		recordCommands();
 		createSynchronization();
@@ -42,7 +40,9 @@ void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vk
 	// Wait until all commands are executed and nothing is pending in the queue
 	vkDeviceWaitIdle(mainDevice.logicalDevice); //or to use vkQueueWaitIdle();
 
-	mesh.destroyVertexBuffer();
+	for (size_t i = 0; i < meshList.size(); i++) {
+		meshList[i].destroyBuffers();
+	}
 	for (size_t i = 0; i < MAX_FRAME_DRAWS; i++) {
 		vkDestroySemaphore(mainDevice.logicalDevice, semaphoreFinishRender[i], nullptr);
 		vkDestroySemaphore(mainDevice.logicalDevice, semaphoreImageAvailable[i], nullptr);
@@ -137,7 +137,7 @@ void VulkanRenderer::createInstance()
 	// Most data here doesn't affect the program and is for developer convenience
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "Vulkan Tutorial App";					// Custom name of the application
+	appInfo.pApplicationName = "Vulkan Tutorial App";			// Custom name of the application
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);		// Custom version of the application
 	appInfo.pEngineName = "No Engine";							// Custom engine name
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);			// Custom engine version
@@ -671,15 +671,22 @@ void VulkanRenderer::recordCommands()
 				// Bind Pipeline to be used in render pass
 				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-				// Get the buffer to be bound in the pipeline
-				VkBuffer vertexBuffers[] = { mesh.getVertexBuffer() };						// buffers to bind
-				VkDeviceSize offsets[] = { 0 };												// Offsets into buffers being bound
-				vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);	// cmd to bind vertex buffer before drawing
+				for (size_t j = 0; j < meshList.size(); j++) {
 
-				// Execute pipeline
-				vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(mesh.getVertexCount()), 1, 0, 0);
+					// Get the buffer to be bound in the pipeline
+					VkBuffer vertexBuffers[] = { meshList[j].getVertexBuffer() };						// buffers to bind
+					VkDeviceSize offsets[] = { 0 };												// Offsets into buffers being bound
+					vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);	// cmd to bind vertex buffer before drawing
 
-			// End Render Pass
+					// Bind index buffer
+					vkCmdBindIndexBuffer(commandBuffers[i], meshList[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+					// Execute pipeline
+					//vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(mesh.getVertexCount()), 1, 0, 0);	// A vertex draw method
+					vkCmdDrawIndexed(commandBuffers[i], meshList[j].getIndexCount(), 1, 0, 0, 0);					// An index draw method
+				}
+
+				// End Render Pass
 			vkCmdEndRenderPass(commandBuffers[i]);
 
 		// Stop recording to command buffer
@@ -793,11 +800,9 @@ bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* che
 			}
 		}
 	}
-
 	if (checkExtensionCount < checkExtensionsNeeded->size()) {
 		return false;
 	}
-
 	return true;
 }
 
@@ -1053,9 +1058,41 @@ VkShaderModule VulkanRenderer::createShaderModule(const std::vector<char>& code)
 
 void VulkanRenderer::createTestMesh()
 {
-	// Create Mesh
-	std::vector<Vertex> v = mesh.testMeshData();
-	mesh = Mesh(mainDevice.physicalDevice, mainDevice.logicalDevice, &v);
+	// Vertex Data
+	std::vector<Vertex> meshVertices1 = {
+	{ { -0.1, -0.4, 0.0 },{ 1.0f, 0.0f, 0.0f } },	// 0
+	{ { -0.1, 0.4, 0.0 },{ 0.0f, 1.0f, 0.0f } },	    // 1
+	{ { -0.9, 0.4, 0.0 },{ 0.0f, 0.0f, 1.0f } },    // 2
+	{ { -0.9, -0.4, 0.0 },{ 1.0f, 1.0f, 0.0f } },   // 3
+	};
+
+	std::vector<Vertex> meshVertices2 = {
+		{ { 0.9, -0.3, 0.0 },{ 1.0f, 0.0f, 0.0f } },	// 0
+		{ { 0.9, 0.1, 0.0 },{ 0.0f, 1.0f, 0.0f } },	    // 1
+		{ { 0.1, 0.3, 0.0 },{ 0.0f, 0.0f, 1.0f } },    // 2
+		{ { 0.1, -0.3, 0.0 },{ 1.0f, 1.0f, 0.0f } },   // 3
+	};
+
+	//std::vector<Vertex> v = {											
+	//	{ {0.4, -0.4, 0.0}			,		{1.0f, 0.0f, 0.0f}	},
+	//	{ {0.4, 0.4, 0.0}			,		{0.0f, 1.0f, 0.0f}	},
+	//	{ {-0.4, 0.4, 0.0}			,		{0.0f, 0.0f, 1.0f}	},
+	//	{ { -0.4, -0.4, 0.0 }		,		{1.0f, 1.0f, 0.0f}	}
+	//};		
+
+	// Index Data
+	std::vector<uint32_t> indices = {
+		0, 1, 2, 
+		2, 3, 0
+	};				
+
+	Mesh mesh1 = Mesh(mainDevice.physicalDevice, mainDevice.logicalDevice, graphicsQueue, 
+		graphicsCommandPool, &meshVertices1, &indices);
+	Mesh mesh2 = Mesh(mainDevice.physicalDevice, mainDevice.logicalDevice, graphicsQueue,
+		graphicsCommandPool, &meshVertices2, &indices);
+
+	meshList.push_back(mesh1), meshList.push_back(mesh2);
+
 }
 
 void VulkanRenderer::setupDebugMessenger()

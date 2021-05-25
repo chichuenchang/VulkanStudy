@@ -32,6 +32,7 @@ private:
 
 	// Scene Objects
 	Mesh mesh;
+	std::vector<Mesh> meshList;
 
 	//// Vulkan Components
 	VkInstance instance;
