@@ -5,17 +5,21 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
-
 const int MAX_FRAME_DRAWS = 2; // this number should be less than or equal to the number of swapchain images
+const int MAX_OBJECTS = 16;
 
 const std::vector<const char*> deviceExtensionsNeeded = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME  //"VK_KHR_swapchain"
 };
 
 // Transformation Matrices
-struct MVP {
+struct UboViewProjection {
 	glm::mat4 projectsion;
 	glm::mat4 view;
+};
+
+// Separate the model from the MVP as we want to update this particular one for every object
+struct UboModel {
 	glm::mat4 model;
 };
 
@@ -77,7 +81,6 @@ static std::vector<char> readFile(const std::string& filename) {
 }
 
 static float getDeltaTime() {
-
 	static float deltaTime = 0.0f;
 	static float lastTime = 0.0f;
 	float now = glfwGetTime();

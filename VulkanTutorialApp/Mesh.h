@@ -18,6 +18,9 @@ public:
 	int getIndexCount();
 	VkBuffer getIndexBuffer();
 
+	void setModel(glm::mat4 inModel);
+	UboModel getModel();
+
 	~Mesh();
 
 private:
@@ -31,6 +34,8 @@ private:
 
 	VkPhysicalDevice physicalDevice;
 	VkDevice device;
+
+	UboModel uboModel;
 
 	void createVertexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, 
 		std::vector<Vertex>* vertices);

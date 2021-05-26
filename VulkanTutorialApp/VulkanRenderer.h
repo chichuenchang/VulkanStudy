@@ -23,7 +23,7 @@ public:
 	~VulkanRenderer();
 
 	int init(GLFWwindow* newWindow);
-	void updateModel(glm::mat4 ModelInput);
+	void updateModel(int modelId, glm::mat4 ModelInput);
 	void cleanup();
 	void draw();	//draw call
 
@@ -36,8 +36,8 @@ private:
 	Mesh mesh;
 	std::vector<Mesh> meshList;
 
-	// Transformation Matrices
-	MVP mvp;
+	// Transformation Matrices					// [note]: the reason to setup dynamic uniform buffer is because the number of descriptor sets provided by the physical device is limited. 
+	UboViewProjection uboViewProjection;		// Also, for each obj drawn we want projection and view are the same but model can change		
 
 	//// Vulkan Components
 	VkInstance instance;
@@ -57,11 +57,17 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers;
 	
 	// - Descriptor Sets
-	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorSetLayout descriptorSetLayout;			// set the binding
 	VkDescriptorPool descriptorPool;					// to hold data of Descriptor Sets
 	std::vector<VkDescriptorSet> descriptorSets;		// 1 descriptor set for one uniform buffer
-	std::vector<VkBuffer> uniformBuffer;				// 1 uniformBuffer for each swapchain image
-	std::vector<VkDeviceMemory> uniformBufferMemory;	
+	std::vector<VkBuffer> vpUniformBuffer;				// 1 uniformBuffer for each swapchain image
+	std::vector<VkDeviceMemory> vpUniformBufferMemory;	
+	std::vector<VkBuffer> mUniformBufferDynamic;
+	std::vector<VkDeviceMemory> mUniformBufferMemory;
+
+	VkDeviceSize minUniformBufferOffset;
+	size_t modelUniformAlignment;
+	UboModel* modelTransferSpace;
 
 	// - Pipeline
 	VkPipeline graphicsPipeline;
@@ -74,6 +80,7 @@ private:
 	// - utility
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
+
 
 	// - synchronization
 	std::vector<VkSemaphore> semaphoreImageAvailable;		//signal for image available
@@ -121,10 +128,13 @@ private:
 	void recordCommands();
 
 	// - Update Uniform Buffer
-	void updateUniformBuffer(uint32_t swapChainImageIndex);
+	void updateUniformBuffers(uint32_t swapChainImageIndex);
 
 	// - Get Functions
 	void getPhysicalDevice();
+
+	// - Allocate
+	void allocateDynamicBufferTransferSpace();
 
 	// - Support Functions
 	// -- Checker Functions
