@@ -12,6 +12,13 @@ const std::vector<const char*> deviceExtensionsNeeded = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME  //"VK_KHR_swapchain"
 };
 
+// Transformation Matrices
+struct MVP {
+	glm::mat4 projectsion;
+	glm::mat4 view;
+	glm::mat4 model;
+};
+
 //vertes data representation
 struct Vertex {
 	glm::vec3 pos;		// vertex position
@@ -67,6 +74,16 @@ static std::vector<char> readFile(const std::string& filename) {
 	file.close();
 
 	return fileBuffer;
+}
+
+static float getDeltaTime() {
+
+	static float deltaTime = 0.0f;
+	static float lastTime = 0.0f;
+	float now = glfwGetTime();
+	deltaTime = now - lastTime;
+	lastTime = now;
+	return deltaTime;
 }
 
 static uint32_t findMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t allowedTypes, 

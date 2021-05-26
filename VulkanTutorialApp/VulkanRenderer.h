@@ -3,6 +3,8 @@
 //#define VK_USE_PLATFORM_WIN32_KHR //def this to create surface for win32 system
 #define GLFW_INCLUDE_VULKAN // Tell GLFW to help include vulkan
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <stdexcept>
 #include <vector>
@@ -21,9 +23,9 @@ public:
 	~VulkanRenderer();
 
 	int init(GLFWwindow* newWindow);
+	void updateModel(glm::mat4 ModelInput);
 	void cleanup();
 	void draw();	//draw call
-
 
 private:
 	GLFWwindow* window;
@@ -33,6 +35,9 @@ private:
 	// Scene Objects
 	Mesh mesh;
 	std::vector<Mesh> meshList;
+
+	// Transformation Matrices
+	MVP mvp;
 
 	//// Vulkan Components
 	VkInstance instance;
@@ -47,17 +52,24 @@ private:
 	VkSwapchainKHR swapchain;
 
 	// [important]: commandBuffers[0] must correspond to swapChainFramebuffers[0], and then swapChainImages[0], index must be the same
-	std::vector<SwapChainImage> swapChainImages;	//swap chain holds multiple images
+	std::vector<SwapChainImage> swapChainImages;		// swap chain holds multiple images
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
 	
+	// - Descriptor Sets
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorPool descriptorPool;					// to hold data of Descriptor Sets
+	std::vector<VkDescriptorSet> descriptorSets;		// 1 descriptor set for one uniform buffer
+	std::vector<VkBuffer> uniformBuffer;				// 1 uniformBuffer for each swapchain image
+	std::vector<VkDeviceMemory> uniformBufferMemory;	
+
 	// - Pipeline
 	VkPipeline graphicsPipeline;
 	VkPipelineLayout pipelineLayout;
 	VkRenderPass renderPass;
 
 	// - Pools
-	VkCommandPool graphicsCommandPool; //this pool is only used for graphics queue
+	VkCommandPool graphicsCommandPool;			//this pool is only used for graphics queue
 
 	// - utility
 	VkFormat swapChainImageFormat;
@@ -94,14 +106,22 @@ private:
 	void createSuface();
 	void createSwapChain();
 	void createRenderPass();
+	void createDescriptorSetLayout();
 	void createGraphicsPipeline();
 	void createFramebuffer();
 	void createCommandPool();
 	void allocateCommandBuffers();
 	void createSynchronization();
 
+	void createUniformBuffers();
+	void createDescriptorPool();
+	void allocateDescriptorSets();
+
 	// - Record commandBuffer
 	void recordCommands();
+
+	// - Update Uniform Buffer
+	void updateUniformBuffer(uint32_t swapChainImageIndex);
 
 	// - Get Functions
 	void getPhysicalDevice();

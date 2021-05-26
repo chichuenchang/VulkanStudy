@@ -18,8 +18,6 @@ public:
 	int getIndexCount();
 	VkBuffer getIndexBuffer();
 
-	std::vector<Vertex> testMeshData();
-
 	~Mesh();
 
 private:

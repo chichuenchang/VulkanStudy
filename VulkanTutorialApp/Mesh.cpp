@@ -43,18 +43,6 @@ void Mesh::destroyBuffers()
 	vkFreeMemory(device, indexBufferMemory, nullptr);
 }
 
-std::vector<Vertex> Mesh::testMeshData()
-{
-	return std::vector<Vertex>{
-		{ {0.4, -0.4, 0.0}			,		{1.0f, 0.0f, 0.0f}	},
-		{ {0.4, 0.4, 0.0}			,		{0.0f, 1.0f, 0.0f}	},
-		{ {-0.4, 0.4, 0.0}			,		{0.0f, 0.0f, 1.0f}	},
-															  
-		{ { -0.4, 0.4, 0.0 }		,		{0.0f, 0.0f, 1.0f}	},
-		{ { -0.4, -0.4, 0.0 }		,		{1.0f, 1.0f, 0.0f}	},
-		{ { 0.4, -0.4, 0.0 }		,		{1.0f, 0.0f, 0.0f}	}
-	};
-}
 
 Mesh::~Mesh()
 {
