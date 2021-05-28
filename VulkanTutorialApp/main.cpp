@@ -22,6 +22,7 @@ void initWindow(std::string wName = "Test Window", const int width = 800, const 
 	window = glfwCreateWindow(width, height, wName.c_str(), nullptr, nullptr);
 }
 
+// Custom data 
 void update() {
 
 	static float angle = 0.0f;
@@ -37,7 +38,36 @@ void update() {
 
 	vulkanRenderer.updateModel(0, model1);
 	vulkanRenderer.updateModel(1, model2);
-	//vulkanRenderer.updateModel(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f)));
+}
+
+//// Custom Data
+void createTestMesh() {
+	// Vertex Data
+	std::vector<Vertex> meshVertices1 = {
+			{ { -0.4, 0.4, 0.0 },{ 1.0f, 0.0f, 0.0f } },	// 0
+			{ { -0.4, -0.4, 0.0 },{ 0.0f, 1.0f, 0.0f } },	    // 1
+			{ { 0.4, -0.4, 0.0 },{ 0.0f, 0.0f, 1.0f } },    // 2
+			{ { 0.4, 0.4, 0.0 },{ 1.0f, 1.0f, 0.0f } },   // 3
+	};
+	std::vector<Vertex> meshVertices2 = {
+			{ { -0.25, 0.6, 0.0 },{ 1.0f, 0.0f, 0.0f } },	// 0
+			{ { -0.25, -0.6, 0.0 },{ 0.0f, 1.0f, 0.0f } },	    // 1
+			{ { 0.25, -0.6, 0.0 },{ 0.0f, 0.0f, 1.0f } },    // 2
+			{ { 0.25, 0.6, 0.0 },{ 1.0f, 1.0f, 0.0f } },   // 3
+	};
+
+	std::vector<uint32_t> indices = {
+		0, 1, 2,
+		2, 3, 0
+	};
+
+	glm::mat4 projectionMat = glm::perspective(glm::radians(45.0f), (float)vulkanRenderer.getSwapChainExtent().width / (float)vulkanRenderer.getSwapChainExtent().height,
+		0.1f, 100.0f);
+	projectionMat[1][1] *= -1;
+	glm::mat4 viewMat = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+
+
 }
 
 int main() {

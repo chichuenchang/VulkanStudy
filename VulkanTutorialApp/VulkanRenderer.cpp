@@ -14,10 +14,10 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 
 	try {
 		createInstance();
-		setupDebugMessenger();
-		createSuface();				// create surface 
+		setupDebugMessenger();	
+		createSuface();					// create surface 
 		getPhysicalDevice();		
-		createLogicalDevice();		// this will call getQueueFamily(), need instantce, physical device, and surface before we can get & check support of queuefamily 
+		createLogicalDevice();			// this will call getQueueFamily(), need instantce, physical device, and surface before we can get & check support of queuefamily 
 		createSwapChain();
 		createRenderPass();
 		createDescriptorSetLayout();
@@ -44,6 +44,16 @@ void VulkanRenderer::updateModel(int modelId, glm::mat4 ModelInput)
 {
 	if (modelId >= meshList.size()) return;
 	meshList[modelId].setModel(ModelInput);
+}
+
+void VulkanRenderer::setViewProjection(const UboViewProjection& inVP)
+{
+	uboViewProjection = inVP;
+}
+
+void VulkanRenderer::setMeshList(std::vector<Mesh>& meshList)
+{
+	this->meshList = meshList;
 }
 
 void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vkDestroy#()
@@ -103,10 +113,10 @@ void VulkanRenderer::draw()
 	vkResetFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame]);
 
 	// Get index of next image to be drawn to, and then signal semaphore when ready to be drawn to
-	uint32_t imageIndex;										//never timeout
-	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), semaphoreImageAvailable[currentFrame], VK_NULL_HANDLE, &imageIndex); //this extension call finds which one is the next image, and pass the index of that image in the swapchain
+	uint32_t nextImageIndex;										//never timeout
+	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), semaphoreImageAvailable[currentFrame], VK_NULL_HANDLE, &nextImageIndex); //this extension call finds which one is the next image, and pass the index of that image in the swapchain
 
-	updateUniformBuffers(imageIndex);										// Copy MVP matrix data to the uniform buffer
+	updateUniformBuffers(nextImageIndex);										// Copy MVP matrix data to the uniform buffer
 
 	// -- SUBMIT COMMAND BUFFER TO RENDER --
 	// Queue submission information
@@ -119,7 +129,7 @@ void VulkanRenderer::draw()
 	};
 	submitInfo.pWaitDstStageMask = waitStages;								// Stages to check semaphores at
 	submitInfo.commandBufferCount = 1;										// Number of command buffers to submit
-	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];				// Command buffer to submit, the index here is the same index get from vkAcquireNextImageKHR()
+	submitInfo.pCommandBuffers = &commandBuffers[nextImageIndex];				// Command buffer to submit, the index here is the same index get from vkAcquireNextImageKHR()
 	submitInfo.signalSemaphoreCount = 1;									// Number of semaphores to signal
 	submitInfo.pSignalSemaphores = &semaphoreFinishRender[currentFrame];	// Semaphores to signal when command buffer finishes
 	// Submit command buffer to queue
@@ -136,7 +146,7 @@ void VulkanRenderer::draw()
 	presentInfo.pWaitSemaphores = &semaphoreFinishRender[currentFrame];		// Semaphores to wait on
 	presentInfo.swapchainCount = 1;											// Number of swapchains to present to
 	presentInfo.pSwapchains = &swapchain;									// Swapchains to present images to
-	presentInfo.pImageIndices = &imageIndex;								// Index of images in swapchains to present
+	presentInfo.pImageIndices = &nextImageIndex;								// Index of images in swapchains to present
 
 	// Present image
 	result = vkQueuePresentKHR(presentationQueue, &presentInfo);
@@ -147,6 +157,11 @@ void VulkanRenderer::draw()
 
 	// Get next frame (use % MAX_FRAME_DRAWS to keep value below MAX_FRAME_DRAWS)
 	currentFrame = (currentFrame + 1) % MAX_FRAME_DRAWS;
+}
+
+VkExtent2D VulkanRenderer::getSwapChainExtent()
+{
+	return swapChainExtent;
 }
 
 void VulkanRenderer::createInstance()
@@ -775,9 +790,9 @@ void VulkanRenderer::allocateDescriptorSets()
 	{
 		// View Projection Descriptor
 		VkDescriptorBufferInfo vpBufferInfo = {};
-		vpBufferInfo.buffer = vpUniformBuffer[i];		// Buffer to get data from
-		vpBufferInfo.offset = 0;						// Position of start of data
-		vpBufferInfo.range = sizeof(UboViewProjection);				// Size of data
+		vpBufferInfo.buffer = vpUniformBuffer[i];							// Buffer to get data from
+		vpBufferInfo.offset = 0;											// Position of start of data
+		vpBufferInfo.range = sizeof(UboViewProjection);						// Size of data
 		// Data about connection between binding and buffer
 		VkWriteDescriptorSet vpSetWrite = {};								// Only for the MVP input
 		vpSetWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -881,25 +896,24 @@ void VulkanRenderer::recordCommands()
 	}
 }
 
-void VulkanRenderer::updateUniformBuffers(uint32_t swapChainImageIndex)
+void VulkanRenderer::updateUniformBuffers(uint32_t nextSwapChainImageIndex)		// this is called in draw()
 {
 	// Copy VP data to the uniform buffer
 	void* data;
-	vkMapMemory(mainDevice.logicalDevice, vpUniformBufferMemory[swapChainImageIndex], 0, 
+	vkMapMemory(mainDevice.logicalDevice, vpUniformBufferMemory[nextSwapChainImageIndex], 0, 
 		sizeof(UboViewProjection), 0, &data);
 	memcpy(data, &uboViewProjection, sizeof(UboViewProjection));
-	vkUnmapMemory(mainDevice.logicalDevice, vpUniformBufferMemory[swapChainImageIndex]);
+	vkUnmapMemory(mainDevice.logicalDevice, vpUniformBufferMemory[nextSwapChainImageIndex]);
 
 	// Prepare data ready to be copied to the dynamic uniform buffer
 	for (size_t i = 0; i < meshList.size(); i++) {					// assign model information to the preparing memory allocated by _aligned_malloc() and then copy to the uniform buffer
 		UboModel* model = (UboModel*)((uint64_t)modelTransferSpace + (i * modelUniformAlignment));
 		*model = meshList[i].getModel();			
 	}												
-
-	vkMapMemory(mainDevice.logicalDevice, mUniformBufferMemory[swapChainImageIndex], 0, 
+	vkMapMemory(mainDevice.logicalDevice, mUniformBufferMemory[nextSwapChainImageIndex], 0, 
 		modelUniformAlignment * meshList.size(), 0, &data);
 	memcpy(data, modelTransferSpace, modelUniformAlignment * meshList.size());
-	vkUnmapMemory(mainDevice.logicalDevice, mUniformBufferMemory[swapChainImageIndex]);
+	vkUnmapMemory(mainDevice.logicalDevice, mUniformBufferMemory[nextSwapChainImageIndex]);
 }
 
 void VulkanRenderer::createLogicalDevice()

@@ -9,7 +9,6 @@ layout (binding = 0) uniform UboViewProjection{		// Binding should match VkDescr
 	mat4 projection;
 	mat4 view;
 }uboViewProjection;
-
 layout (binding = 1) uniform UboModel{
 	mat4 model;
 }uboModel;

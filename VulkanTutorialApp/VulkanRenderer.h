@@ -23,9 +23,17 @@ public:
 	~VulkanRenderer();
 
 	int init(GLFWwindow* newWindow);
-	void updateModel(int modelId, glm::mat4 ModelInput);
 	void cleanup();
 	void draw();	//draw call
+
+	// Get func
+	VkExtent2D getSwapChainExtent();
+
+
+	//Set Func
+	void updateModel(int modelId, glm::mat4 ModelInput);
+	void setViewProjection(const UboViewProjection& inVP);
+	void setMeshList(std::vector<Mesh>& meshList);
 
 private:
 	GLFWwindow* window;
@@ -33,7 +41,7 @@ private:
 	int currentFrame = 0; // keep track of the loop of frame, increment with each frame drawn, when it reaches 2, start from 0 again
 
 	// Scene Objects
-	Mesh mesh;
+	//Mesh mesh;
 	std::vector<Mesh> meshList;
 
 	// Transformation Matrices					// [note]: the reason to setup dynamic uniform buffer is because the number of descriptor sets provided by the physical device is limited. 
@@ -128,7 +136,7 @@ private:
 	void recordCommands();
 
 	// - Update Uniform Buffer
-	void updateUniformBuffers(uint32_t swapChainImageIndex);
+	void updateUniformBuffers(uint32_t nextSwapChainImageIndex);
 
 	// - Get Functions
 	void getPhysicalDevice();
