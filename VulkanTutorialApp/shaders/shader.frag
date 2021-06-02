@@ -4,10 +4,11 @@
 
 // INTPUT
 layout (location = 0) in vec3 col_vsOut;
+layout (location = 9) in vec3 pushData_vsOut;
 
 // OUTPUT
 layout (location = 0) out vec4 outColour; 	// Final output colour (must also have location
 
 void main() {
-	outColour = vec4(col_vsOut, 1.0);
+	outColour = vec4(col_vsOut * pushData_vsOut.x, 1.0);
 }

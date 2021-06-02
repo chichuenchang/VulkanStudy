@@ -36,8 +36,8 @@ void update() {
 	model2 = glm::translate(model2, glm::vec3(2.0f, 0.0f, -5.0f));
 	model2 = glm::rotate(model2, glm::radians(-angle * 100), glm::vec3(0.0f, 0.0f, 1.0f));
 
-	vulkanRenderer.updateModel(0, model1);
-	vulkanRenderer.updateModel(1, model2);
+	vulkanRenderer.updateModel(0, model1, glm::vec3(1.0f));
+	vulkanRenderer.updateModel(1, model2, glm::vec3(1.0f));
 }
 
 //// Custom Data

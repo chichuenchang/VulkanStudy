@@ -14,7 +14,7 @@ Mesh::Mesh(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice, VkQueue trans
 	createVertexBuffer(transferQueue, transferCommandPool, vertices);
 	createIndexBuffer(transferQueue, transferCommandPool, indices);
 
-	uboModel.model = glm::mat4(1.0f);
+	this->model.model = glm::mat4(1.0f);
 }
 
 int Mesh::getVertexCount()
@@ -39,12 +39,22 @@ VkBuffer Mesh::getIndexBuffer()
 
 void Mesh::setModel(glm::mat4 inModel)
 {
-	uboModel.model = inModel;
+	this->model.model = inModel;
 }
 
-UboModel Mesh::getModel()
+void Mesh::setPushConstData(glm::vec3 inPushConst)
 {
-	return uboModel;
+	this->pushConstData.pushConstData = inPushConst;
+}
+
+Model Mesh::getModel()
+{
+	return this->model;
+}
+
+PushConstBlock Mesh::getPushConstData()
+{
+	return this->pushConstData;
 }
 
 void Mesh::destroyBuffers()

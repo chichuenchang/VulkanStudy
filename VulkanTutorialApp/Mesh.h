@@ -17,9 +17,11 @@ public:
 	VkBuffer getVertexBuffer();
 	int getIndexCount();
 	VkBuffer getIndexBuffer();
+	Model getModel();
+	PushConstBlock getPushConstData();
 
 	void setModel(glm::mat4 inModel);
-	UboModel getModel();
+	void setPushConstData(glm::vec3 inPushConst);
 
 	~Mesh();
 
@@ -35,7 +37,8 @@ private:
 	VkPhysicalDevice physicalDevice;
 	VkDevice device;
 
-	UboModel uboModel;
+	Model model;
+	PushConstBlock pushConstData;
 
 	void createVertexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, 
 		std::vector<Vertex>* vertices);

@@ -31,7 +31,7 @@ public:
 
 
 	//Set Func
-	void updateModel(int modelId, glm::mat4 ModelInput);
+	void updateModel(int modelId, glm::mat4 ModelInput, glm::vec3 pushConstIn);
 	void setViewProjection(const UboViewProjection& inVP);
 	void setMeshList(std::vector<Mesh>& meshList);
 
@@ -66,16 +66,17 @@ private:
 	
 	// - Descriptor Sets
 	VkDescriptorSetLayout descriptorSetLayout;			// set the binding
+	VkPushConstantRange pushConstantRange;				// This describes the size of the data passed to push constant
 	VkDescriptorPool descriptorPool;					// to hold data of Descriptor Sets
 	std::vector<VkDescriptorSet> descriptorSets;		// 1 descriptor set for one uniform buffer
 	std::vector<VkBuffer> vpUniformBuffer;				// 1 uniformBuffer for each swapchain image
 	std::vector<VkDeviceMemory> vpUniformBufferMemory;	
 	std::vector<VkBuffer> mUniformBufferDynamic;
 	std::vector<VkDeviceMemory> mUniformBufferMemory;
-
+	// -- Dynamic Uniform Buffer
 	VkDeviceSize minUniformBufferOffset;
 	size_t modelUniformAlignment;
-	UboModel* modelTransferSpace;
+	Model* modelTransferSpace;
 
 	// - Pipeline
 	VkPipeline graphicsPipeline;
@@ -122,6 +123,7 @@ private:
 	void createSwapChain();
 	void createRenderPass();
 	void createDescriptorSetLayout();
+	void createPushConstantRange();
 	void createGraphicsPipeline();
 	void createFramebuffer();
 	void createCommandPool();
@@ -133,7 +135,7 @@ private:
 	void allocateDescriptorSets();
 
 	// - Record commandBuffer
-	void recordCommands();
+	void recordCommands(uint32_t swapchainImageIndex);
 
 	// - Update Uniform Buffer
 	void updateUniformBuffers(uint32_t nextSwapChainImageIndex);

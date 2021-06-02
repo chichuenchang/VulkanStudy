@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 
 const int MAX_FRAME_DRAWS = 2; // this number should be less than or equal to the number of swapchain images
-const int MAX_OBJECTS = 16;
+const int MAX_OBJECTS = 8;
 
 const std::vector<const char*> deviceExtensionsNeeded = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME  //"VK_KHR_swapchain"
@@ -19,8 +19,13 @@ struct UboViewProjection {
 };
 
 // Separate the model from the MVP as we want to update this particular one for every object
-struct UboModel {
+struct Model {
 	glm::mat4 model;
+};
+
+// Push Constants
+struct PushConstBlock {
+	glm::vec3 pushConstData;
 };
 
 //vertes data representation
