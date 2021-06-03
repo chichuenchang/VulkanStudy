@@ -153,6 +153,7 @@ static void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device, VkDev
 	vkBindBufferMemory(device, *outBuffer, *outBufferMemory, 0);
 }
 
+// A one time copy command, copy data from staging CPU visible buffer to GPU dedicated buffer; 1) allocate command buffer, 2) recorde command buffer, 3) submit command buffer to queue
 static void copyBuffer(VkDevice device, VkQueue transferQueue, VkCommandPool transferCommandPool,
 	VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize)
 {

@@ -29,11 +29,14 @@ public:
 	// Get func
 	VkExtent2D getSwapChainExtent();
 
-
-	//Set Func
+	// Set Func
 	void updateModel(int modelId, glm::mat4 ModelInput, glm::vec3 pushConstIn);
 	void setViewProjection(const UboViewProjection& inVP);
 	void setMeshList(std::vector<Mesh>& meshList);
+	// - Set mesh data
+	void setMeshVertexData(const std::vector<std::vector<Vertex>>& inMeshVertices);
+	void setMeshIndicesData(const std::vector<std::vector<uint32_t>>& inMeshIndices);
+	void setViewProjectionMat(const glm::mat4& viewMat, const glm::mat4& projectionMat);
 
 private:
 	GLFWwindow* window;
@@ -41,9 +44,10 @@ private:
 	int currentFrame = 0; // keep track of the loop of frame, increment with each frame drawn, when it reaches 2, start from 0 again
 
 	// Scene Objects
-	//Mesh mesh;
-	std::vector<Mesh> meshList;
+	std::vector<std::vector<Vertex>> meshVertexData;
+	std::vector<std::vector<uint32_t>> meshIndicesData;
 
+	std::vector<Mesh> meshList;
 	// Transformation Matrices					// [note]: the reason to setup dynamic uniform buffer is because the number of descriptor sets provided by the physical device is limited. 
 	UboViewProjection uboViewProjection;		// Also, for each obj drawn we want projection and view are the same but model can change		
 
@@ -63,6 +67,12 @@ private:
 	std::vector<SwapChainImage> swapChainImages;		// swap chain holds multiple images
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
+
+	// Depth Buffer
+	VkImage depthBufferImage;
+	VkDeviceMemory depthBufferImageMemory;
+	VkImageView depthBufferImageView;
+	VkFormat depthBufferImageFormat;
 	
 	// - Descriptor Sets
 	VkDescriptorSetLayout descriptorSetLayout;			// set the binding
@@ -89,7 +99,6 @@ private:
 	// - utility
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
-
 
 	// - synchronization
 	std::vector<VkSemaphore> semaphoreImageAvailable;		//signal for image available
@@ -125,11 +134,12 @@ private:
 	void createDescriptorSetLayout();
 	void createPushConstantRange();
 	void createGraphicsPipeline();
+	void createDepthBufferImage();
 	void createFramebuffer();
 	void createCommandPool();
 	void allocateCommandBuffers();
 	void createSynchronization();
-
+		void createTestMesh();
 	void createUniformBuffers();
 	void createDescriptorPool();
 	void allocateDescriptorSets();
@@ -160,11 +170,14 @@ private:
 	VkSurfaceFormatKHR chooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
 	VkPresentModeKHR chooseBestPresentationMode(const std::vector<VkPresentModeKHR>& modes);
 	VkExtent2D chooseSwapChainExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities);
+	VkFormat chooseSupportedFormat(const std::vector<VkFormat>& inFormats, VkImageTiling tiling, 
+		VkFormatFeatureFlags featureFlags);
 
 	// -- create 
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	VkShaderModule createShaderModule(const std::vector<char>& code);
-	void createTestMesh();
+	VkImage createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
+		VkImageUsageFlags useFlags, VkMemoryPropertyFlags propertyFlags, VkDeviceMemory* outImageMemory);
 
 };
 
