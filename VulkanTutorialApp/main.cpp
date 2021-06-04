@@ -1,4 +1,5 @@
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define STB_IMAGE_IMPLEMENTATION	// Need this define to activate stb library
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE // opengl the depth value (-1.0, 1.0), in vulkan it's (0.0, 1.0)
 
 //#include <GLFW/glfw3.h>
 //#include <vulkan/vulkan.h>
@@ -35,7 +36,7 @@ void update() {
 	model1 = glm::translate(model1, glm::vec3( 0.0f, 0.0f, -2.0f));
 	model1 = glm::rotate(model1, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
 
-	model2 = glm::translate(model2, glm::vec3( 0.0f, 0.0f, -1.87f));
+	model2 = glm::translate(model2, glm::vec3( 0.0f, 0.0f, -3.0f));
 	model2 = glm::rotate(model2, glm::radians(-angle * 100), glm::vec3(0.0f, 0.0f, 1.0f));
 
 	vulkanRenderer.updateModel(0, model1, glm::vec3(1.0f));
@@ -67,7 +68,6 @@ void createTestMesh() {
 		0, 1, 2,
 		2, 3, 0
 	};
-
 	std::vector<std::vector<uint32_t>> meshIndicesList;
 	meshIndicesList.push_back(indices), meshIndicesList.push_back(indices);
 	vulkanRenderer.setMeshIndicesData(meshIndicesList);
@@ -78,8 +78,10 @@ void createTestMesh() {
 	glm::mat4 projectionMat = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
 	projectionMat[1][1] *= -1;
 	glm::mat4 viewMat = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -4.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
 	vulkanRenderer.setViewProjectionMat(viewMat, projectionMat);
+
+	// Set the fileName of the texture to be loaded
+	vulkanRenderer.addTextureFileName("sb.jpg");
 }
 
 void init() {

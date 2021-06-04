@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <array>
 
+// A library to load in textures
+#include <stb_image.h>
+
 #include "Mesh.h"
 #include "Utility.h"
 #include "ValidationLayers.h"
@@ -37,6 +40,8 @@ public:
 	void setMeshVertexData(const std::vector<std::vector<Vertex>>& inMeshVertices);
 	void setMeshIndicesData(const std::vector<std::vector<uint32_t>>& inMeshIndices);
 	void setViewProjectionMat(const glm::mat4& viewMat, const glm::mat4& projectionMat);
+	void addTextureFileName(const std::string& fileName);
+
 
 private:
 	GLFWwindow* window;
@@ -46,8 +51,8 @@ private:
 	// Scene Objects
 	std::vector<std::vector<Vertex>> meshVertexData;
 	std::vector<std::vector<uint32_t>> meshIndicesData;
-
 	std::vector<Mesh> meshList;
+	std::vector<std::string> textureFileNameList;
 	// Transformation Matrices					// [note]: the reason to setup dynamic uniform buffer is because the number of descriptor sets provided by the physical device is limited. 
 	UboViewProjection uboViewProjection;		// Also, for each obj drawn we want projection and view are the same but model can change		
 
@@ -87,6 +92,10 @@ private:
 	VkDeviceSize minUniformBufferOffset;
 	size_t modelUniformAlignment;
 	Model* modelTransferSpace;
+
+	// - Assets
+	std::vector<VkImage> textureImages;
+	std::vector<VkDeviceMemory> textureImageMemory;
 
 	// - Pipeline
 	VkPipeline graphicsPipeline;
@@ -178,6 +187,10 @@ private:
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 	VkImage createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
 		VkImageUsageFlags useFlags, VkMemoryPropertyFlags propertyFlags, VkDeviceMemory* outImageMemory);
+	int createTexture(std::string fileName);
+
+	// -- Loader Function
+	stbi_uc* loadTextureFile(std::string fileName, int* outWidth, int* outHeight, VkDeviceSize* outImageSize);
 
 };
 

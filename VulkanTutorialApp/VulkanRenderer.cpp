@@ -75,11 +75,20 @@ void VulkanRenderer::setViewProjectionMat(const glm::mat4& viewMat, const glm::m
 	uboViewProjection.view = viewMat;
 }
 
+void VulkanRenderer::addTextureFileName(const std::string& fileName)
+{
+	this->textureFileNameList.push_back(fileName);
+}
+
 void VulkanRenderer::cleanup() // whenever vkCreate#() is called, has to call vkDestroy#()
 {	
 	// CPU will not proceed until all commands are executed and nothing is pending in the queue
 	vkDeviceWaitIdle(mainDevice.logicalDevice); //or to use vkQueueWaitIdle();
 
+	for (size_t i = 0; i < textureImages.size(); i++) {
+		vkDestroyImage(mainDevice.logicalDevice, textureImages[i], nullptr);
+		vkFreeMemory(mainDevice.logicalDevice, textureImageMemory[i], nullptr);
+	}
 	vkDestroyImageView(mainDevice.logicalDevice, depthBufferImageView, nullptr);
 	vkDestroyImage(mainDevice.logicalDevice, depthBufferImage, nullptr);
 	vkFreeMemory(mainDevice.logicalDevice, depthBufferImageMemory, nullptr);
@@ -914,13 +923,11 @@ void VulkanRenderer::recordCommands(uint32_t swapchainImageIndex)
 	renderPassBeginInfo.renderArea.extent = swapChainExtent;				// Size of region to run render pass on (starting at offset)
 	
 	std::array<VkClearValue, 2> clearValues = {};
-	clearValues[0].color = { 0.1f, 0.25f, 0.2f, 1.0f };	// clear the color attachement with this value
+	clearValues[0].color = { 0.1f, 0.25f, 0.2, 1.0f };	// clear the color attachement with this value
 	clearValues[1].depthStencil.depth = 1.0f;			// clear the depth buffer with 1.0f
 
 	renderPassBeginInfo.pClearValues = clearValues.data();							// List of clear values (TODO: Depth Attachment Clear Value)
 	renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-
-	
 	renderPassBeginInfo.framebuffer = swapChainFramebuffers[swapchainImageIndex];
 
 	// Start recording commands to command buffer. [note]: vkBeginCommandBuffer() implicitly have the input commandBuffer reset, should explicitly set it in the createCommandPoolInfo (VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
@@ -1440,8 +1447,89 @@ VkImage VulkanRenderer::createImage(uint32_t width, uint32_t height, VkFormat fo
 	return image;
 }
 
+int VulkanRenderer::createTexture(std::string fileName)
+{
+	// Load image file
+	int width, height;
+	VkDeviceSize imageSize;
+	stbi_uc* imageData = loadTextureFile(fileName, &width, &height, &imageSize);
+
+	// Create staging buffer to hold loaded data, ready to copy to device
+	VkBuffer imageStagingBuffer;
+	VkDeviceMemory imageStagingBufferMemory;
+	createBuffer(mainDevice.physicalDevice, mainDevice.logicalDevice, imageSize, 
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		&imageStagingBuffer, &imageStagingBufferMemory);
+
+	// Copy image data to staging buffer
+	void* data;
+	vkMapMemory(mainDevice.logicalDevice, imageStagingBufferMemory, 0, imageSize, 0, &data);
+	memcpy(data, imageData, static_cast<size_t>(imageSize));
+	vkUnmapMemory(mainDevice.logicalDevice, imageStagingBufferMemory);
+
+	// Free original image data
+	stbi_image_free(imageData);
+
+	// Create image to hold final texture
+	VkImage texImage;
+	VkDeviceMemory texImageMemory;
+	texImage = createImage(width, height, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+		&texImageMemory);		//[note]: here we want to copy buffer to image, but copyBuffer() won't work since it's used for copy from buffer to buffer, here we want to copy to an image
+
+
+	// COPY DATA TO IMAGE
+	// Transition image to be DST for copy operation, [note]: the reason to do this is that if we probe into copyImageBuffer() we'll see the layout of image in the vkCmdCopyBufferToImage is LAYOUT_TRANSFER_DST_OPTIMAL, which means the cmdBuffer wants the image layout to be TRANSFER_OPTIMAL when doing copy, however our image is create with VK_IMAGE_LAYOUT_UNDEFINED, this is why we have to transition the layout before copy. Also, it's the same reason for the transition after the copy
+	transitionImageLayout(mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool,
+		texImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	// Copy image data
+	copyImageBuffer(mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool, imageStagingBuffer, 
+		texImage, width, height);
+
+	// Transition image to be shader readable for shader usage
+	//transitionImageLayout(mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool,
+	//	texImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	// Add texture data to vector for reference
+	textureImages.push_back(texImage);
+	textureImageMemory.push_back(texImageMemory);
+
+	// Destroy staging buffers
+	vkDestroyBuffer(mainDevice.logicalDevice, imageStagingBuffer, nullptr);
+	vkFreeMemory(mainDevice.logicalDevice, imageStagingBufferMemory, nullptr);
+
+	// Return index of new texture image
+	return textureImages.size() - 1;
+}
+
+stbi_uc* VulkanRenderer::loadTextureFile(std::string fileName, int* outWidth, int* outHeight, VkDeviceSize* outImageSize)
+{
+	// Number of channels image uses
+	int channels;
+
+	// Load pixel data for image
+	std::string fileLoc = "../Textures/" + fileName;
+	stbi_uc* image = stbi_load(fileLoc.c_str(), outWidth, outHeight, &channels, STBI_rgb_alpha);
+
+	if (!image)
+	{
+		throw std::runtime_error("Failed to load a Texture file! (" + fileName + ")");
+	}
+
+	// Calculate image size using given and known data
+	*outImageSize = *outWidth * *outHeight * 4;
+
+	return image;
+}
+
 void VulkanRenderer::createTestMesh()
 {
+	for (const std::string& fileName : this->textureFileNameList) {
+		int textureIndex = createTexture(fileName);
+	}
+
 	for (int i = 0; i < meshVertexData.size(); i++) {
 		Mesh temp = Mesh(mainDevice.physicalDevice, mainDevice.logicalDevice, graphicsQueue,
 			graphicsCommandPool, &meshVertexData[i], &meshIndicesData[i]);
