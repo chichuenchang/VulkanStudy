@@ -33,10 +33,9 @@ void update() {
 	if (angle > 360.0f) angle -= 360.0f;
 
 	glm::mat4 model1(1.0f);
-	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
-	glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, -0.0f, -10.5f));
-	glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), glm::radians(angle* 10.0f), glm::vec3(0.0f, 1.0f, 0.0f))
-		* glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
+	glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, -20.0f, -30.5f));
+	glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0.0f, 1.0f, 0.0f));
 	model1 = translate * rotate * scale;
 
 	vulkanRenderer.updateModel(0, model1);
@@ -76,23 +75,30 @@ void createTestMesh() {
 	glfwGetWindowSize(window, &width, &height);
 	glm::mat4 projectionMat = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
 	projectionMat[1][1] *= -1;
-	glm::mat4 viewMat = glm::lookAt(glm::vec3(0.0f, 5.0f, 15.0), glm::vec3(0.0f, 0.0f, -4.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 viewMat = glm::lookAt(glm::vec3(0.0f, 10.0f, 15.0), glm::vec3(0.0f, 0.0f, -4.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	vulkanRenderer.setViewProjectionMat(viewMat, projectionMat);
 
 	// Model Matrix and Init Import Mesh
 	glm::mat4 model1(1.0f);
-	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
-	glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, -0.0f, -10.5f));
+	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
+	glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, 0.0f, -100.5f));
 	glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f))
 		*glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	model1 = translate * rotate * scale;
-	vulkanRenderer.createImportMesh("uh60.obj", model1);
+	//vulkanRenderer.createImportMesh("uh60.obj", model1);
 
-	scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
-	translate = glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -2.0f, -40.5f));
-	rotate = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	model1 = translate * rotate * scale;
-	vulkanRenderer.createImportMesh("Seahawk.obj", model1);
+	//scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
+	//translate = glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -2.0f, -40.5f));
+	//rotate = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	//model1 = translate * rotate * scale;
+	//vulkanRenderer.createImportMesh("Seahawk.obj", model1);
+
+	//scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
+	//translate = glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -2.0f, -40.5f));
+	//rotate = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	//model1 = translate * rotate * scale;
+	vulkanRenderer.createImportMesh("Old House 2 3D Models.obj", model1);
+
 }
 
 void init() {

@@ -70,6 +70,11 @@ std::vector<std::string> ImportMesh::LoadMaterials(const aiScene* scene)
 			{
 				// get rid of the directory in the string, only leaves the fileName
 				int idx = std::string(path.data).rfind("\\");
+				if (idx == std::string::npos) {
+					idx = std::string(path.data).rfind("/");
+				}
+				if (idx == std::string::npos) continue;
+
 				std::string fileName = std::string(path.data).substr(idx + 1);
 
 				textureList[i] = fileName;		// If there exist diffuse texture, change fileName; if there's not, do nothing, and the fileName remains as ""
