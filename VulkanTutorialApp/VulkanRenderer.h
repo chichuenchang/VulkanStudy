@@ -5,6 +5,9 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 #include <stdexcept>
 #include <vector>
@@ -16,6 +19,7 @@
 #include <stb_image.h>
 
 #include "Mesh.h"
+#include "ImportMesh.h"
 #include "Utility.h"
 #include "ValidationLayers.h"
 
@@ -33,14 +37,17 @@ public:
 	VkExtent2D getSwapChainExtent();
 
 	// Set Func
-	void updateModel(int modelId, glm::mat4 ModelInput, glm::vec3 pushConstIn);
-	void setViewProjection(const UboViewProjection& inVP);
+	void updateModel(int modelId, glm::mat4 ModelInput);
+	//void setViewProjection(const UboViewProjection& inVP);
+	void setViewProjectionMat(const glm::mat4& viewMat, const glm::mat4& projectionMat);
 	void setMeshList(std::vector<Mesh>& meshList);
 	// - Set mesh data
 	void setMeshVertexData(const std::vector<std::vector<Vertex>>& inMeshVertices);
 	void setMeshIndicesData(const std::vector<std::vector<uint32_t>>& inMeshIndices);
-	void setViewProjectionMat(const glm::mat4& viewMat, const glm::mat4& projectionMat);
 	void addTextureFileName(const std::string& fileName);
+
+	//
+	void createImportMesh(std::string meshFileName, glm::mat4 inModelMat);
 
 
 private:
@@ -48,15 +55,23 @@ private:
 
 	int currentFrame = 0; // keep track of the loop of frame, increment with each frame drawn, when it reaches 2, start from 0 again
 
-	// Scene Objects
+	// Assets
+	// - Import Mesh
+	std::vector<ImportMesh> importMeshList;
+	// -- Meshes
 	std::vector<std::vector<Vertex>> meshVertexData;
 	std::vector<std::vector<uint32_t>> meshIndicesData;
 	std::vector<Mesh> meshList;
-	std::vector<std::string> textureFileNameList;
+	// -- Textures
+	std::vector<std::string> textureFileNameList;		// Store the fileName of the pictures to be loaded by addTextureFileName()
+	std::vector<VkImage> textureImages;					// Hold all the textureImages created from createTextureImage();
+	std::vector<VkDeviceMemory> textureImageMemory;		// Hold all the imageMemory created from createTextureImage();
+	std::vector<VkImageView>textureImageViews;
+
 	// Transformation Matrices					// [note]: the reason to setup dynamic uniform buffer is because the number of descriptor sets provided by the physical device is limited. 
 	UboViewProjection uboViewProjection;		// Also, for each obj drawn we want projection and view are the same but model can change		
 
-	//// Vulkan Components
+	// Vulkan Components
 	VkInstance instance;
 	struct {
 		VkPhysicalDevice physicalDevice;
@@ -65,19 +80,18 @@ private:
 	QueueFamilyIndices queueFamilyIndices;
 	VkQueue graphicsQueue;
 	VkQueue presentationQueue;
-	VkSurfaceKHR surface;		//A CHRONOS extension
+	VkSurfaceKHR surface;		// A CHRONOS extension
 	VkSwapchainKHR swapchain;
-
-	// [important]: commandBuffers[0] must correspond to swapChainFramebuffers[0], and then swapChainImages[0], index must be the same
-	std::vector<SwapChainImage> swapChainImages;		// swap chain holds multiple images
+	std::vector<SwapChainImage> swapChainImages;		// swap chain holds multiple images, // [important]: commandBuffers[0] must correspond to swapChainFramebuffers[0], and then swapChainImages[0], index must be the same
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
-
 	// Depth Buffer
 	VkImage depthBufferImage;
 	VkDeviceMemory depthBufferImageMemory;
 	VkImageView depthBufferImageView;
 	VkFormat depthBufferImageFormat;
+	// Texture Sampler
+	VkSampler textureSampler;	
 	
 	// - Descriptor Sets
 	VkDescriptorSetLayout descriptorSetLayout;			// set the binding
@@ -88,14 +102,15 @@ private:
 	std::vector<VkDeviceMemory> vpUniformBufferMemory;	
 	std::vector<VkBuffer> mUniformBufferDynamic;
 	std::vector<VkDeviceMemory> mUniformBufferMemory;
+	// - Sampler Descriptor Set
+	VkDescriptorPool samplerDescriptorPool;
+	VkDescriptorSetLayout samplerDescriptorSetLayout;
+	std::vector<VkDescriptorSet> samplerDescriptorSets;	// 1 sampler descriptor set for 1 texture
+
 	// -- Dynamic Uniform Buffer
 	VkDeviceSize minUniformBufferOffset;
 	size_t modelUniformAlignment;
 	Model* modelTransferSpace;
-
-	// - Assets
-	std::vector<VkImage> textureImages;
-	std::vector<VkDeviceMemory> textureImageMemory;
 
 	// - Pipeline
 	VkPipeline graphicsPipeline;
@@ -148,6 +163,7 @@ private:
 	void createCommandPool();
 	void allocateCommandBuffers();
 	void createSynchronization();
+	void createTextureSampler();
 		void createTestMesh();
 	void createUniformBuffers();
 	void createDescriptorPool();
@@ -187,7 +203,10 @@ private:
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 	VkImage createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
 		VkImageUsageFlags useFlags, VkMemoryPropertyFlags propertyFlags, VkDeviceMemory* outImageMemory);
+	int createTextureImage(std::string fileName);
 	int createTexture(std::string fileName);
+	int allocateTextureDescriptorSet(VkImageView textureImage);
+	
 
 	// -- Loader Function
 	stbi_uc* loadTextureFile(std::string fileName, int* outWidth, int* outHeight, VkDeviceSize* outImageSize);

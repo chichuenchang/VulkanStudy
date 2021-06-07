@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 
 const int MAX_FRAME_DRAWS = 2; // this number should be less than or equal to the number of swapchain images
-const int MAX_OBJECTS = 8;
+const int MAX_OBJECTS = 32;
 
 const std::vector<const char*> deviceExtensionsNeeded = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME  //"VK_KHR_swapchain"
@@ -32,6 +32,7 @@ struct PushConstBlock {
 struct Vertex {
 	glm::vec3 pos;		// vertex position
 	glm::vec3 col;		// vertex color
+	glm::vec2 uv;		// texture coord
 };
 
 // Indices (locations) of Queue Families (if they exist at all)

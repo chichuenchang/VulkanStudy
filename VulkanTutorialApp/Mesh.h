@@ -10,7 +10,8 @@ class Mesh
 public:
 	Mesh();
 	Mesh(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice, VkQueue transferQueue, 
-		VkCommandPool transferCommandPool, std::vector<Vertex>* vertices, std::vector<uint32_t>* indices); // constructor to create buffer
+		VkCommandPool transferCommandPool, std::vector<Vertex>* vertices, std::vector<uint32_t>* indices,
+		int inTextureIndex); // constructor to create buffer
 	void destroyBuffers();
 
 	int getVertexCount(); //get the number of vertex and pass to vkCmdDraw()
@@ -19,6 +20,7 @@ public:
 	VkBuffer getIndexBuffer();
 	Model getModel();
 	PushConstBlock getPushConstData();
+	int getTextureIndex();
 
 	void setModel(glm::mat4 inModel);
 	void setPushConstData(glm::vec3 inPushConst);
@@ -39,6 +41,7 @@ private:
 
 	Model model;
 	PushConstBlock pushConstData;
+	int textureIndex;
 
 	void createVertexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, 
 		std::vector<Vertex>* vertices);

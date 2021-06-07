@@ -5,7 +5,8 @@ Mesh::Mesh()
 }
 
 Mesh::Mesh(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice, VkQueue transferQueue,
-	VkCommandPool transferCommandPool, std::vector<Vertex>* vertices, std::vector<uint32_t>* indices)
+	VkCommandPool transferCommandPool, std::vector<Vertex>* vertices, std::vector<uint32_t>* indices,
+	int inTextureIndex)
 {
 	vertexCount = vertices->size();
 	indexCount = indices->size();
@@ -15,6 +16,8 @@ Mesh::Mesh(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice, VkQueue trans
 	createIndexBuffer(transferQueue, transferCommandPool, indices);
 
 	this->model.model = glm::mat4(1.0f);
+
+	textureIndex = inTextureIndex;
 }
 
 int Mesh::getVertexCount()
@@ -55,6 +58,11 @@ Model Mesh::getModel()
 PushConstBlock Mesh::getPushConstData()
 {
 	return this->pushConstData;
+}
+
+int Mesh::getTextureIndex()
+{
+	return this->textureIndex;
 }
 
 void Mesh::destroyBuffers()
