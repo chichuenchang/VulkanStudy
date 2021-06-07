@@ -47,7 +47,7 @@ public:
 	void addTextureFileName(const std::string& fileName);
 
 	//
-	void createImportMesh(std::string meshFileName, glm::mat4 inModelMat);
+	void addNCreateImportMesh(std::string meshFileName, glm::mat4 inModelMat);
 
 
 private:

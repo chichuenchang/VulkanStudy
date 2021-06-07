@@ -13,6 +13,8 @@
 GLFWwindow* window;
 VulkanRenderer vulkanRenderer;
 
+
+
 void initWindow(std::string wName = "Test Window", const int width = 800, const int height = 450) {
 
 	//init glfw
@@ -79,25 +81,7 @@ void createTestMesh() {
 	vulkanRenderer.setViewProjectionMat(viewMat, projectionMat);
 
 	// Model Matrix and Init Import Mesh
-	glm::mat4 model1(1.0f);
-	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
-	glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, 0.0f, -100.5f));
-	glm::mat4 rotate = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f))
-		*glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-	model1 = translate * rotate * scale;
-	//vulkanRenderer.createImportMesh("uh60.obj", model1);
-
-	//scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
-	//translate = glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -2.0f, -40.5f));
-	//rotate = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	//model1 = translate * rotate * scale;
-	//vulkanRenderer.createImportMesh("Seahawk.obj", model1);
-
-	//scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
-	//translate = glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -2.0f, -40.5f));
-	//rotate = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	//model1 = translate * rotate * scale;
-	vulkanRenderer.createImportMesh("Old House 2 3D Models.obj", model1);
+	vulkanRenderer.addNCreateImportMesh("Old House 2 3D Models.obj", glm::mat4(1.0f));
 
 }
 

@@ -37,7 +37,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 			createTestMesh();
 	}
 	catch (const std::runtime_error& e) {
-		printf("ERROR: %s\n", e.what());
+		printf("Vulkan Infrastructure ERROR: %s\n", e.what());
 		return EXIT_FAILURE;
 	}
 	return 0;
@@ -48,11 +48,6 @@ void VulkanRenderer::updateModel(int modelId, glm::mat4 ModelInput)
 	if (modelId >= importMeshList.size()) return;
 	importMeshList[modelId].setModel(ModelInput);
 }
-
-//void VulkanRenderer::setViewProjection(const UboViewProjection& inVP)
-//{
-//	uboViewProjection = inVP;
-//}
 
 void VulkanRenderer::setMeshList(std::vector<Mesh>& meshList)
 {
@@ -1701,7 +1696,7 @@ int VulkanRenderer::allocateTextureDescriptorSet(VkImageView textureImage)
 	return samplerDescriptorSets.size() - 1;
 }
 
-void VulkanRenderer::createImportMesh(std::string meshFileName, glm::mat4 inModelMat)
+void VulkanRenderer::addNCreateImportMesh(std::string meshFileName, glm::mat4 inModelMat)
 {
 	// Import model "scene"
 	Assimp::Importer importer;

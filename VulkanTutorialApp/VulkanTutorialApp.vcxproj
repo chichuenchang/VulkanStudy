@@ -146,6 +146,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ImportMesh.cpp" />
+    <ClCompile Include="InitGLFW.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="ValidationLayers.cpp" />
@@ -153,6 +154,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ImportMesh.h" />
+    <ClInclude Include="InitGLFW.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Utility.h" />
     <ClInclude Include="ValidationLayers.h" />
