@@ -57,7 +57,7 @@ private:
 
 	// Assets
 	// - Import Mesh
-	std::vector<ImportMesh> importMeshList;
+	std::vector<ImportMesh> importMeshList;				// This is populated by addNCretaeImportMesh(), which is called from main()
 	// -- Meshes
 	std::vector<std::vector<Vertex>> meshVertexData;
 	std::vector<std::vector<uint32_t>> meshIndicesData;
@@ -68,7 +68,7 @@ private:
 	std::vector<VkDeviceMemory> textureImageMemory;		// Hold all the imageMemory created from createTextureImage();
 	std::vector<VkImageView>textureImageViews;
 
-	// Transformation Matrices					// [note]: the reason to setup dynamic uniform buffer is because the number of descriptor sets provided by the physical device is limited. 
+	// View Projection Matrices					// [note]: the reason to setup dynamic uniform buffer is because the number of descriptor sets provided by the physical device is limited. 
 	UboViewProjection uboViewProjection;		// Also, for each obj drawn we want projection and view are the same but model can change		
 
 	// Vulkan Components
@@ -83,40 +83,56 @@ private:
 	VkSurfaceKHR surface;		// A CHRONOS extension
 	VkSwapchainKHR swapchain;
 	std::vector<SwapChainImage> swapChainImages;		// swap chain holds multiple images, // [important]: commandBuffers[0] must correspond to swapChainFramebuffers[0], and then swapChainImages[0], index must be the same
-	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
-	// Depth Buffer
-	VkImage depthBufferImage;
-	VkDeviceMemory depthBufferImageMemory;
-	VkImageView depthBufferImageView;
-	VkFormat depthBufferImageFormat;
-	// Texture Sampler
-	VkSampler textureSampler;	
-	
-	// - Descriptor Sets
-	VkDescriptorSetLayout descriptorSetLayout;			// set the binding
+	// - FrameBuffer
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+	// - Render Pass
+	VkRenderPass renderPass;
+	// -- Pipeline
+	VkPipeline graphicsPipeline;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline subpass1GraphicsPipeline;
+	VkPipelineLayout subpass1PipelineLayout;
+	// --- FrameBuffer Attachment ( Depth Buffers )							// Will be the input of Frame buffer
+	VkFormat depthBufferImageFormat;										// Assigned in createRenderPass();
+	std::vector<VkImage> depthBufferImage;									// Assigned in createDepthBufferImage(); // The reason why we need multiple subpasses is that we are using multi subpasses. So, for each subpass we would need to output a color attachment as well as a depth attachment to be taken over by the next subpass
+	std::vector<VkDeviceMemory> depthBufferImageMemory;						// Assigned in createDepthBufferImage(); 
+	std::vector<VkImageView> depthBufferImageView;							// Assigned in createDepthBufferImage(); 
+	// --- FrameBuffer Attachment (Color Buffer )							// Will be the input of Frame buffer
+	VkFormat colorBufferImageFormat;										// Assigned in createRenderPass();
+	std::vector<VkImage> colorBufferImage;									// Assigned in createColorBufferImage();
+	std::vector<VkDeviceMemory> colorBufferImageMemory;
+	std::vector<VkImageView> colorBufferImageView;
+
+	// - Push Constants 
 	VkPushConstantRange pushConstantRange;				// This describes the size of the data passed to push constant
-	VkDescriptorPool descriptorPool;					// to hold data of Descriptor Sets
-	std::vector<VkDescriptorSet> descriptorSets;		// 1 descriptor set for one uniform buffer
-	std::vector<VkBuffer> vpUniformBuffer;				// 1 uniformBuffer for each swapchain image
+														
+	// - Descriptor Sets
+	VkDescriptorSetLayout descriptorSetLayout;				// set the binding
+	VkDescriptorPool descriptorPool;						// to hold data of Descriptor Sets
+	std::vector<VkDescriptorSet> descriptorSets;			// 1 descriptor set for one uniform buffer
+	// - Sampler Descriptor Set
+	VkDescriptorSetLayout samplerDescriptorSetLayout;
+	VkDescriptorPool samplerDescriptorPool;
+	std::vector<VkDescriptorSet> samplerDescriptorSets;		// 1 sampler descriptor set for 1 texture
+	// - Subpass Input Descriptor Set
+	VkDescriptorSetLayout subpassInputSetLayout;
+	VkDescriptorPool subpassInputDescriptorPool;
+	std::vector<VkDescriptorSet> subpassInputDescritporSets;			// 1 descriptor set for one swapchain Image
+	
+	// Uniform Buffer
+	std::vector<VkBuffer> vpUniformBuffer;					// 1 uniformBuffer for each swapchain image
 	std::vector<VkDeviceMemory> vpUniformBufferMemory;	
 	std::vector<VkBuffer> mUniformBufferDynamic;
 	std::vector<VkDeviceMemory> mUniformBufferMemory;
-	// - Sampler Descriptor Set
-	VkDescriptorPool samplerDescriptorPool;
-	VkDescriptorSetLayout samplerDescriptorSetLayout;
-	std::vector<VkDescriptorSet> samplerDescriptorSets;	// 1 sampler descriptor set for 1 texture
-
 	// -- Dynamic Uniform Buffer
 	VkDeviceSize minUniformBufferOffset;
 	size_t modelUniformAlignment;
 	Model* modelTransferSpace;
 
-	// - Pipeline
-	VkPipeline graphicsPipeline;
-	VkPipelineLayout pipelineLayout;
-	VkRenderPass renderPass;
-
+	// Texture Sampler
+	VkSampler textureSampler;	
+	
 	// - Pools
 	VkCommandPool graphicsCommandPool;			//this pool is only used for graphics queue
 
@@ -159,15 +175,17 @@ private:
 	void createPushConstantRange();
 	void createGraphicsPipeline();
 	void createDepthBufferImage();
+	void createColorBufferImage();
 	void createFramebuffer();
 	void createCommandPool();
 	void allocateCommandBuffers();
 	void createSynchronization();
 	void createTextureSampler();
-		void createTestMesh();
 	void createUniformBuffers();
 	void createDescriptorPool();
 	void allocateDescriptorSets();
+	void allocateSubpassInputDescriptorSets();
+		void createTestMesh();
 
 	// - Record commandBuffer
 	void recordCommands(uint32_t swapchainImageIndex);
